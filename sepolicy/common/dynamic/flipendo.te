@@ -25,4 +25,4 @@ allow flipendo fwk_stats_hwservice:hwservice_manager find;
 allow flipendo color_display_service:service_manager find;
 
 # Allow flipendo to find hal_power_service
-allow flipendo hal_power_service:service_manager find;
+hal_client_domain(flipendo, hal_power);
