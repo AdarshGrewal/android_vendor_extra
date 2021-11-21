@@ -20,3 +20,7 @@ PRODUCT_COPY_FILES += \
 # Overlay
 PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/extra/overlay
 DEVICE_PACKAGE_OVERLAYS += vendor/extra/overlay/common
+
+# Overlay - RRO
+PRODUCT_PACKAGES += \
+    PixelLauncherIconsOverlay
