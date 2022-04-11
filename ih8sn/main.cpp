@@ -19,7 +19,6 @@ int main(int argc, char *argv[]) {
     const auto config = load_config();
     const auto build_fingerprint = config.find("BUILD_FINGERPRINT");
     const auto build_security_patch_date = config.find("BUILD_SECURITY_PATCH_DATE");
-    const auto build_tags = config.find("BUILD_TAGS");
     const auto build_type = config.find("BUILD_TYPE");
     const auto build_version_release = config.find("BUILD_VERSION_RELEASE");
     const auto manufacturer_name = config.find("MANUFACTURER_NAME");
@@ -30,10 +29,6 @@ int main(int argc, char *argv[]) {
                 build_fingerprint->second.c_str());
         property_override("ro.build.description",
                 fingerprint_to_description(build_fingerprint->second).c_str());
-    }
-
-    if (is_init_stage && build_tags != config.end()) {
-        property_override(property_list("ro.", "build.tags"), build_tags->second.c_str());
     }
 
     if (is_init_stage && build_type != config.end()) {
@@ -63,6 +58,7 @@ int main(int argc, char *argv[]) {
 
     if (is_init_stage) {
         property_override("ro.debuggable", "0");
+        property_override(property_list("ro.", "build.tags"), "release-keys");
     }
 
     if (is_boot_completed_stage) {
