@@ -22,7 +22,9 @@ ${CXX} \
     aosp/bionic/libc/system_properties/system_properties.cpp \
     aosp/system/core/base/strings.cpp \
     aosp/system/core/property_service/libpropertyinfoparser/property_info_parser.cpp \
+    config.cpp \
     main.cpp \
+    properties.cpp \
     -static \
     -std=c++17 \
     -o ih8sn

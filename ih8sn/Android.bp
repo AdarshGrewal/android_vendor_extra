@@ -12,7 +12,9 @@ cc_binary {
 
     srcs: [
         "aosp/**/*.cpp",
+        "config.cpp",
         "main.cpp",
+        "properties.cpp",
     ],
 
     static_libs: [
