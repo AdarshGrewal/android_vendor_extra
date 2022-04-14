@@ -52,6 +52,8 @@
     <icon drawable="@drawable/themed_icon_calculator" package="com.google.android.calculator" />
     <icon drawable="@drawable/themed_icon_call_recorder" package="com.github.axet.callrecorder" />
     <icon drawable="@drawable/themed_icon_calm" package="com.calm.android" />
+    <icon drawable="@drawable/themed_icon_camera" package="com.android.arn" />
+    <icon drawable="@drawable/themed_icon_camera" package="com.android.camera" />
     <icon drawable="@drawable/themed_icon_camera" package="com.android.camera2" />
     <icon drawable="@drawable/themed_icon_camera" package="com.android.MGC" />
     <icon drawable="@drawable/themed_icon_camera" package="com.android.mgc" />
