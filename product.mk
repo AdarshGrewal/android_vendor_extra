@@ -10,3 +10,6 @@ ifneq ($(BUILD_VANILLA), true)
 WITH_GMS := true
 $(call inherit-product, vendor/gms/products/gms.mk)
 endif
+
+PRODUCT_COPY_FILES += \
+    vendor/extra/prebuilt/common/etc/fonts_customization.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/fonts_customization.xml
