@@ -23,4 +23,5 @@ DEVICE_PACKAGE_OVERLAYS += vendor/extra/overlay/common
 
 # Overlay - RRO
 PRODUCT_PACKAGES += \
+    ExtraLineageSDKOverlay \
     PixelLauncherIconsOverlay

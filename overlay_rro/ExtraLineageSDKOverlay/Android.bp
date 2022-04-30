@@ -1,0 +1,4 @@
+runtime_resource_overlay {
+    name: "ExtraLineageSDKOverlay",
+    product_specific: true
+}
