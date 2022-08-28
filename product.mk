@@ -11,6 +11,7 @@ PRODUCT_COPY_FILES += \
 ifneq ($(BUILD_VANILLA), true)
 WITH_GMS := true
 $(call inherit-product, vendor/gms/products/gms.mk)
+$(call inherit-product, vendor/extra/pixel-framework/config.mk)
 
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.boot.vendor.overlay.theme=com.android.internal.systemui.navbar.gestural;com.google.android.systemui.gxoverlay
