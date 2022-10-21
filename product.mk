@@ -28,12 +28,3 @@ DEVICE_PACKAGE_OVERLAYS += vendor/extra/overlay/common
 PRODUCT_PACKAGES += \
     ExtraLineageSDKOverlay \
     PixelLauncherIconsOverlay
-
-# I hate Safety Net
-ifneq ("$(wildcard  vendor/extra/prebuilt/etc/ih8sn_$(subst lineage_,,$(TARGET_PRODUCT)).conf)","")
-PRODUCT_PACKAGES += \
-    ih8sn
-
-PRODUCT_COPY_FILES += \
-    vendor/extra/prebuilt/etc/ih8sn_$(subst lineage_,,$(TARGET_PRODUCT)).conf:/system/etc/ih8sn.conf
-endif
