@@ -1,3 +1,6 @@
+# Audio
+TARGET_EXCLUDES_AUDIOFX := true
+
 # Gboard side padding
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.com.google.ime.kb_pad_port_l=4 \
