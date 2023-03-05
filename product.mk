@@ -33,7 +33,9 @@ endif
 
 # Overlay
 PRODUCT_PACKAGES += \
+    ExtraFrameworksResTarget \
     ExtraLineageSDKOverlay \
+    ExtraSettingsResTarget \
     PixelLauncherIconsOverlay
 
 PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/extra/overlay

@@ -1,0 +1,4 @@
+runtime_resource_overlay {
+    name: "ExtraSettingsResTarget",
+    product_specific: true
+}
