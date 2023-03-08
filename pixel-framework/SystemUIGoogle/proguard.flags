@@ -1,4 +1,4 @@
--include ../../../frameworks/base/packages/SystemUI/proguard.flags
+-include ../../../../frameworks/base/packages/SystemUI/proguard.flags
 
 -keep class com.android.systemui.smartspace.** { *; }
 -keep class android.frameworks.** { *; }
