@@ -84,12 +84,6 @@
         </provider>
 
         <service android:exported="true" android:name="com.google.android.systemui.elmyra.ElmyraServiceProxy" android:permission="com.google.android.elmyra.permission.CONFIGURE_ASSIST_GESTURE"/>
-        <service android:exported="true" android:name="com.google.android.systemui.columbus.ColumbusServiceProxy" android:permission="com.google.android.columbus.permission.CONFIGURE_COLUMBUS_GESTURE"/>
-        <service android:exported="true" android:name="org.pixelexperience.systemui.columbus.ColumbusTargetRequestServiceWrapper">
-            <intent-filter>
-                <action android:name="com.google.android.systemui.QUICK_TAP_TARGET_REQUEST"/>
-            </intent-filter>
-        </service>
         <!--service android:exported="true" android:name="com.google.android.systemui.power.batteryhealth.HealthService"/>
         <receiver android:exported="true" android:name="com.google.android.systemui.power.batteryhealth.HealthUpdateReceiver"/>
         <service android:enabled="false" android:exported="false" android:name="com.google.android.systemui.lowlightclock.LowLightClockDreamService" android:permission="android.permission.BIND_DREAM_SERVICE">
