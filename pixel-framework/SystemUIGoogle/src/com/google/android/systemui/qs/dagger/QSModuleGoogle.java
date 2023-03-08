@@ -33,7 +33,6 @@ import com.android.systemui.qs.dagger.QSFragmentComponent;
 import com.android.systemui.qs.external.QSExternalModule;
 import com.android.systemui.statusbar.phone.AutoTileManager;
 import com.android.systemui.statusbar.phone.ManagedProfileController;
-import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.CastController;
 import com.android.systemui.statusbar.policy.DataSaverController;
 import com.android.systemui.statusbar.policy.DeviceControlsController;
@@ -41,8 +40,6 @@ import com.android.systemui.statusbar.policy.HotspotController;
 import com.android.systemui.statusbar.policy.SafetyController;
 import com.android.systemui.statusbar.policy.WalletController;
 import com.android.systemui.util.settings.SecureSettings;
-
-import com.google.android.systemui.statusbar.phone.AutoTileManagerGoogle;
 
 import javax.inject.Named;
 
@@ -73,9 +70,8 @@ public interface QSModuleGoogle {
             DeviceControlsController deviceControlsController,
             WalletController walletController,
             SafetyController safetyController,
-            @Named(RBC_AVAILABLE) boolean isReduceBrightColorsAvailable,
-            BatteryController batteryController) {
-        AutoTileManager manager = new AutoTileManagerGoogle(
+            @Named(RBC_AVAILABLE) boolean isReduceBrightColorsAvailable) {
+        AutoTileManager manager = new AutoTileManager(
                 context,
                 autoAddTrackerBuilder,
                 host,
@@ -90,8 +86,7 @@ public interface QSModuleGoogle {
                 deviceControlsController,
                 walletController,
                 safetyController,
-                isReduceBrightColorsAvailable,
-                batteryController
+                isReduceBrightColorsAvailable
         );
         manager.init();
         return manager;

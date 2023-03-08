@@ -16,25 +16,14 @@
 
 package com.google.android.systemui.power.dagger;
 
-import android.content.Context;
-
-import com.android.internal.logging.UiEventLogger;
-import com.android.systemui.animation.DialogLaunchAnimator;
-import com.android.systemui.broadcast.BroadcastDispatcher;
-import com.android.systemui.broadcast.BroadcastSender;
-import com.android.systemui.dagger.SysUISingleton;
-import com.android.systemui.plugins.ActivityStarter;
 import com.android.systemui.power.EnhancedEstimates;
 import com.android.systemui.power.PowerUI;
 import com.android.systemui.power.data.repository.PowerRepositoryModule;
-import com.android.systemui.statusbar.policy.BatteryController;
-import com.google.android.systemui.power.EnhancedEstimatesGoogleImpl;
-import com.google.android.systemui.power.PowerNotificationWarningsGoogleImpl;
+import com.android.systemui.power.EnhancedEstimatesImpl;
+import com.android.systemui.power.PowerNotificationWarnings;
 
 import dagger.Binds;
-import dagger.Lazy;
 import dagger.Module;
-import dagger.Provides;
 
 
 /**
@@ -46,24 +35,16 @@ import dagger.Provides;
     }
 )
 public interface PowerModuleGoogle {
-    @Provides
-    @SysUISingleton
-    static PowerNotificationWarningsGoogleImpl providePowerNotificationWarningsGoogleImpl(Context context, ActivityStarter activityStarter,
-                                                                                          BroadcastSender broadcastSender, Lazy<BatteryController> batteryControllerLazy,
-                                                                                          DialogLaunchAnimator dialogLaunchAnimator, UiEventLogger uiEventLogger,
-                                                                                          BroadcastDispatcher broadcastDispatcher) {
-        return new PowerNotificationWarningsGoogleImpl(context, activityStarter, broadcastSender, batteryControllerLazy, dialogLaunchAnimator, uiEventLogger, broadcastDispatcher);
-    }
 
     /**
      *
      */
     @Binds
-    EnhancedEstimates bindEnhancedEstimates(EnhancedEstimatesGoogleImpl enhancedEstimates);
+    EnhancedEstimates bindEnhancedEstimates(EnhancedEstimatesImpl enhancedEstimates);
 
     /**
      *
      */
     @Binds
-    PowerUI.WarningsUI provideWarningsUi(PowerNotificationWarningsGoogleImpl controllerImpl);
+    PowerUI.WarningsUI provideWarningsUi(PowerNotificationWarnings controllerImpl);
 }

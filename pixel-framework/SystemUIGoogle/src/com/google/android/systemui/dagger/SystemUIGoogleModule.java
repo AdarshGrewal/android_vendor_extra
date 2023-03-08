@@ -52,12 +52,10 @@ import com.android.systemui.screenshot.ReferenceScreenshotModule;
 import com.android.systemui.shade.NotificationShadeWindowControllerImpl;
 import com.android.systemui.shade.ShadeController;
 import com.android.systemui.shade.ShadeControllerImpl;
-import com.android.systemui.settings.UserContentResolverProvider;
 import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.NotificationLockscreenUserManager;
 import com.android.systemui.statusbar.NotificationLockscreenUserManagerImpl;
 import com.android.systemui.statusbar.NotificationShadeWindowController;
-import com.android.systemui.statusbar.KeyguardIndicationController;
 import com.android.systemui.statusbar.notification.collection.provider.VisualStabilityProvider;
 import com.android.systemui.statusbar.notification.collection.render.GroupMembershipManager;
 import com.android.systemui.statusbar.phone.DozeServiceHost;
@@ -80,18 +78,11 @@ import com.android.systemui.volume.dagger.VolumeModule;
 
 import com.google.android.systemui.NotificationLockscreenUserManagerGoogle;
 import com.google.android.systemui.controls.GoogleControlsTileResourceConfigurationImpl;
-import com.google.android.systemui.dreamliner.DockObserver;
-import com.google.android.systemui.dreamliner.dagger.DreamlinerModule;
 import com.google.android.systemui.power.dagger.PowerModuleGoogle;
 import com.google.android.systemui.qs.dagger.QSModuleGoogle;
-import com.google.android.systemui.qs.tileimpl.QSFactoryImplGoogle;
-import com.google.android.systemui.reversecharging.ReverseChargingController;
-import com.google.android.systemui.reversecharging.dagger.ReverseChargingModule;
 import com.google.android.systemui.smartspace.BcSmartspaceDataProvider;
 import com.google.android.systemui.smartspace.dagger.SmartspaceGoogleModule;
 import com.google.android.systemui.statusbar.dagger.StartCentralSurfacesGoogleModule;
-import com.google.android.systemui.statusbar.KeyguardIndicationControllerGoogle;
-import com.google.android.systemui.statusbar.policy.BatteryControllerImplGoogle;
 
 import javax.inject.Named;
 
@@ -109,9 +100,7 @@ import dagger.Lazy;
         ReferenceScreenshotModule.class,
         StartCentralSurfacesGoogleModule.class,
         VolumeModule.class,
-        SmartspaceGoogleModule.class,
-        DreamlinerModule.class,
-        ReverseChargingModule.class
+        SmartspaceGoogleModule.class
         })
 public abstract class SystemUIGoogleModule {
 
@@ -125,6 +114,30 @@ public abstract class SystemUIGoogleModule {
     @Binds
     abstract NotificationLockscreenUserManager bindNotificationLockscreenUserManager(
             NotificationLockscreenUserManagerGoogle notificationLockscreenUserManager);
+
+    @Provides
+    @SysUISingleton
+    static BatteryController provideBatteryController(
+            Context context,
+            EnhancedEstimates enhancedEstimates,
+            PowerManager powerManager,
+            BroadcastDispatcher broadcastDispatcher,
+            DemoModeController demoModeController,
+            DumpManager dumpManager,
+            @Main Handler mainHandler,
+            @Background Handler bgHandler) {
+        BatteryController bC = new BatteryControllerImpl(
+                context,
+                enhancedEstimates,
+                powerManager,
+                broadcastDispatcher,
+                demoModeController,
+                dumpManager,
+                mainHandler,
+                bgHandler);
+        bC.init();
+        return bC;
+    }
 
     @Provides
     @SysUISingleton
@@ -144,6 +157,14 @@ public abstract class SystemUIGoogleModule {
         spC.init();
         return spC;
     }
+
+    /** */
+    @Binds
+    @SysUISingleton
+    public abstract QSFactory bindQSFactory(QSFactoryImpl qsFactoryImpl);
+
+    @Binds
+    abstract DockManager bindDockManager(DockManagerImpl dockManager);
 
     @Binds
     abstract ShadeController provideShadeController(ShadeControllerImpl shadeController);
@@ -210,45 +231,6 @@ public abstract class SystemUIGoogleModule {
 
     @Binds
     abstract DozeHost provideDozeHost(DozeServiceHost dozeServiceHost);
-
-    @Binds
-    abstract KeyguardIndicationController bindKeyguardIndicationControllerGoogle(KeyguardIndicationControllerGoogle keyguardIndicationControllerGoogle);
-
-    @Binds
-    abstract DockManager bindDockManager(DockObserver dockObserver);
-
-    @Provides
-    @SysUISingleton
-    static BatteryController provideBatteryController(
-            Context context,
-            EnhancedEstimates enhancedEstimates,
-            PowerManager powerManager,
-            BroadcastDispatcher broadcastDispatcher,
-            DemoModeController demoModeController,
-            DumpManager dumpManager,
-            @Main Handler mainHandler,
-            @Background Handler bgHandler,
-            UserContentResolverProvider userContentResolverProvider,
-            ReverseChargingController reverseChargingController) {
-        BatteryController bC = new BatteryControllerImplGoogle(
-                context,
-                enhancedEstimates,
-                powerManager,
-                broadcastDispatcher,
-                demoModeController,
-                dumpManager,
-                mainHandler,
-                bgHandler,
-                userContentResolverProvider,
-                reverseChargingController);
-        bC.init();
-        return bC;
-    }
-
-    /** */
-    @Binds
-    @SysUISingleton
-    public abstract QSFactory bindQSFactoryGoogle(QSFactoryImplGoogle qsFactoryImpl);
 
     @Binds
     abstract ControlsTileResourceConfiguration bindControlsTileResourceConfiguration(GoogleControlsTileResourceConfigurationImpl configuration);
