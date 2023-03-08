@@ -23,7 +23,6 @@ android_library {
         "vendor-pixelatoms-java",
         "smartspace-proto-java",
         "guava",
-        "matchmaker-lib",
         "vendor-google-interfaces-lib",
     ],
     manifest: "AndroidManifest.xml",

@@ -1,5 +1,0 @@
-java_import  {
-    name: "matchmaker-lib",
-    sdk_version: "current",
-    jars: ["libs/com.google.android.apps.miphone.aiai.matchmaker.overview.jar"],
-}
