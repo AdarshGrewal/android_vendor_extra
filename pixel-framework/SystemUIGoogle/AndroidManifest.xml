@@ -83,7 +83,6 @@
             android:grantUriPermissions="true">
         </provider>
 
-        <service android:exported="true" android:name="com.google.android.systemui.elmyra.ElmyraServiceProxy" android:permission="com.google.android.elmyra.permission.CONFIGURE_ASSIST_GESTURE"/>
         <!--service android:exported="true" android:name="com.google.android.systemui.power.batteryhealth.HealthService"/>
         <receiver android:exported="true" android:name="com.google.android.systemui.power.batteryhealth.HealthUpdateReceiver"/>
         <service android:enabled="false" android:exported="false" android:name="com.google.android.systemui.lowlightclock.LowLightClockDreamService" android:permission="android.permission.BIND_DREAM_SERVICE">
