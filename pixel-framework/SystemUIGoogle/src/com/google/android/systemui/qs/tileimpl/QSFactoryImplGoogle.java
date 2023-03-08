@@ -56,6 +56,16 @@ import com.google.android.systemui.qs.tiles.ReverseChargingTile;
 
 // Custom
 import com.android.systemui.qs.tiles.PowerShareTile;
+import com.android.systemui.qs.tiles.BatterySaverTile;
+import com.android.systemui.qs.tiles.AmbientDisplayTile;
+import com.android.systemui.qs.tiles.AODTile;
+import com.android.systemui.qs.tiles.CaffeineTile;
+import com.android.systemui.qs.tiles.HeadsUpTile;
+import com.android.systemui.qs.tiles.ProfilesTile;
+import com.android.systemui.qs.tiles.ReadingModeTile;
+import com.android.systemui.qs.tiles.SyncTile;
+import com.android.systemui.qs.tiles.UsbTetherTile;
+import com.android.systemui.qs.tiles.VpnTile;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -65,7 +75,6 @@ import dagger.Lazy;
 
 @SysUISingleton
 public class QSFactoryImplGoogle extends QSFactoryImpl {
-    private final Provider<BatterySaverTileGoogle> mBatterySaverTileGoogleProvider;
     private final Provider<ReverseChargingTile> mReverseChargingTileProvider;
 
     @Inject
@@ -85,7 +94,7 @@ public class QSFactoryImplGoogle extends QSFactoryImpl {
             Provider<LocationTile> locationTileProvider,
             Provider<CastTile> castTileProvider,
             Provider<HotspotTile> hotspotTileProvider,
-            Provider<BatterySaverTileGoogle> batterySaverTileGoogleProvider,
+            Provider<BatterySaverTile> batterySaverTileProvider,
             Provider<DataSaverTile> dataSaverTileProvider,
             Provider<NightDisplayTile> nightDisplayTileProvider,
             Provider<NfcTile> nfcTileProvider,
@@ -102,8 +111,17 @@ public class QSFactoryImplGoogle extends QSFactoryImpl {
             Provider<OneHandedModeTile> oneHandedModeTileProvider,
             Provider<ColorCorrectionTile> colorCorrectionTileProvider,
             Provider<DreamTile> dreamTileProvider,
+            Provider<AmbientDisplayTile> ambientDisplayTileProvider,
+            Provider<AODTile> aodTileProvider,
+            Provider<CaffeineTile> caffeineTileProvider,
+            Provider<HeadsUpTile> headsUpTileProvider,
             Provider<ReverseChargingTile> reverseChargingTileProvider,
-            Provider<PowerShareTile> powerShareTileProvider) {
+            Provider<PowerShareTile> powerShareTileProvider,
+            Provider<ProfilesTile> profilesTileProvider,
+            Provider<ReadingModeTile> readingModeTileProvider,
+            Provider<SyncTile> syncTileProvider,
+            Provider<UsbTetherTile> usbTetherTileProvider,
+            Provider<VpnTile> vpnTileTileProvider) {
         super(qsHostLazy,
                 customTileBuilderProvider,
                 wifiTileProvider,
@@ -119,7 +137,7 @@ public class QSFactoryImplGoogle extends QSFactoryImpl {
                 locationTileProvider,
                 castTileProvider,
                 hotspotTileProvider,
-                () -> batterySaverTileGoogleProvider.get(),
+                batterySaverTileProvider,
                 dataSaverTileProvider,
                 nightDisplayTileProvider,
                 nfcTileProvider,
@@ -136,17 +154,23 @@ public class QSFactoryImplGoogle extends QSFactoryImpl {
                 oneHandedModeTileProvider,
                 colorCorrectionTileProvider,
                 dreamTileProvider,
-                powerShareTileProvider);
+                ambientDisplayTileProvider,
+                aodTileProvider,
+                caffeineTileProvider,
+                headsUpTileProvider,
+                powerShareTileProvider,
+                profilesTileProvider,
+                readingModeTileProvider,
+                syncTileProvider,
+                usbTetherTileProvider,
+                vpnTileTileProvider);
         mReverseChargingTileProvider = reverseChargingTileProvider;
-        mBatterySaverTileGoogleProvider = batterySaverTileGoogleProvider;
     }
 
     @Override
     public final QSTileImpl createTileInternal(String str) {
         if (str.equals("reverse")) {
             return mReverseChargingTileProvider.get();
-        } else if (str.equals("battery")) {
-            return mBatterySaverTileGoogleProvider.get();
         }
         return super.createTileInternal(str);
     }
