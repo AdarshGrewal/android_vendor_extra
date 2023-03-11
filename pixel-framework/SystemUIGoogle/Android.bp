@@ -18,11 +18,8 @@ android_library {
     ],
     static_libs: [
         "SystemUIGoogle-res",
-        "tensorflowlite_java",
         "android.frameworks.stats-V1-java",
-        "vendor-pixelatoms-java",
         "smartspace-proto-java",
-        "guava",
     ],
     manifest: "AndroidManifest.xml",
 
@@ -40,14 +37,7 @@ android_app {
     static_libs: [
         "SystemUIGoogle-core",
     ],
-    jni_libs: ["libtensorflowlite_jni"],
-    use_embedded_native_libs: true,
     resource_dirs: [],
-    asset_dirs: ["assets"],
-    aaptflags: [
-        "-0 .tflite",
-        "-0 .vocab",
-    ],
 
     platform_apis: true,
     system_ext_specific: true,
