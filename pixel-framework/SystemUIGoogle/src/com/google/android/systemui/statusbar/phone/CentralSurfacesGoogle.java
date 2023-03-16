@@ -48,13 +48,16 @@ import com.android.systemui.keyguard.KeyguardUnlockAnimationController;
 import com.android.systemui.keyguard.KeyguardViewMediator;
 import com.android.systemui.keyguard.ScreenLifecycle;
 import com.android.systemui.keyguard.WakefulnessLifecycle;
+import com.android.systemui.keyguard.ui.viewmodel.LightRevealScrimViewModel;
 import com.android.systemui.navigationbar.NavigationBarController;
 import com.android.systemui.plugins.FalsingManager;
 import com.android.systemui.plugins.PluginDependencyProvider;
+import com.android.systemui.plugins.PluginManager;
 import com.android.systemui.recents.ScreenPinningRequest;
 import com.android.systemui.settings.brightness.BrightnessSliderController;
+import com.android.systemui.shade.CameraLauncher;
 import com.android.systemui.shade.ShadeController;
-import com.android.systemui.shared.plugins.PluginManager;
+import com.android.systemui.shade.ShadeExpansionStateManager;
 import com.android.systemui.statusbar.CommandQueue;
 import com.android.systemui.statusbar.KeyguardIndicationController;
 import com.android.systemui.statusbar.LockscreenShadeTransitionController;
@@ -74,7 +77,6 @@ import com.android.systemui.statusbar.notification.row.NotificationGutsManager;
 import com.android.systemui.statusbar.phone.*;
 import com.android.systemui.statusbar.phone.dagger.CentralSurfacesComponent;
 import com.android.systemui.statusbar.phone.ongoingcall.OngoingCallController;
-import com.android.systemui.statusbar.phone.panelstate.PanelExpansionStateManager;
 import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.ConfigurationController;
 import com.android.systemui.statusbar.policy.DeviceProvisionedController;
@@ -108,6 +110,7 @@ public class CentralSurfacesGoogle extends CentralSurfacesImpl {
     private final SmartSpaceController mSmartSpaceController;
     private final NotificationLockscreenUserManagerGoogle mNotificationLockscreenUserManagerGoogle;
     private final WallpaperNotifier mWallpaperNotifier;
+    private Context mContext;
 
     @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     @Inject
@@ -133,7 +136,7 @@ public class CentralSurfacesGoogle extends CentralSurfacesImpl {
             NotificationGutsManager notificationGutsManager,
             NotificationLogger notificationLogger,
             NotificationInterruptStateProvider notificationInterruptStateProvider,
-            PanelExpansionStateManager panelExpansionStateManager,
+            ShadeExpansionStateManager shadeExpansionStateManager,
             KeyguardViewMediator keyguardViewMediator,
             DisplayMetrics displayMetrics,
             MetricsLogger metricsLogger,
@@ -198,6 +201,8 @@ public class CentralSurfacesGoogle extends CentralSurfacesImpl {
             DeviceStateManager deviceStateManager,
             WiredChargingRippleController wiredChargingRippleController,
             IDreamManager dreamManager,
+            Lazy<CameraLauncher> cameraLauncherLazy,
+            Lazy<LightRevealScrimViewModel> lightRevealScrimViewModelLazy,
             WallpaperNotifier wallpaperNotifier,
             SmartSpaceController smartSpaceController,
             TunerService tunerService) {
@@ -207,7 +212,7 @@ public class CentralSurfacesGoogle extends CentralSurfacesImpl {
                 notificationWakeUpCoordinator, keyguardBypassController, keyguardStateController,
                 headsUpManagerPhone, dynamicPrivacyController, falsingManager, falsingCollector,
                 broadcastDispatcher, notificationGutsManager, notificationLogger, notificationInterruptStateProvider,
-                panelExpansionStateManager, keyguardViewMediator,
+                shadeExpansionStateManager, keyguardViewMediator,
                 displayMetrics, metricsLogger, uiBgExecutor, notificationMediaManager,
                 notificationLockscreenUserManagerGoogle, remoteInputManager, userSwitcherController,
                 batteryController, colorExtractor, screenLifecycle,
@@ -229,7 +234,8 @@ public class CentralSurfacesGoogle extends CentralSurfacesImpl {
                 featureFlags, keyguardUnlockAnimationController, delayableExecutor,
                 messageRouter, wallpaperManager, startingSurfaceOptional, activityLaunchAnimator,
                 jankMonitor, deviceStateManager, wiredChargingRippleController,
-                dreamManager, tunerService);
+                dreamManager, cameraLauncherLazy, lightRevealScrimViewModelLazy, tunerService);
+        mContext = context;
         mWallpaperNotifier = wallpaperNotifier;
         mSmartSpaceController = smartSpaceController;
         mNotificationLockscreenUserManagerGoogle = notificationLockscreenUserManagerGoogle;
