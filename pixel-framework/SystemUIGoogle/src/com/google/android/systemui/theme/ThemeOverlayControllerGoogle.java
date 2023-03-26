@@ -52,16 +52,17 @@ public class ThemeOverlayControllerGoogle extends ThemeOverlayController {
     public ThemeOverlayControllerGoogle(Context context, BroadcastDispatcher broadcastDispatcher,
                                         @Background Handler bgHandler, @Main Executor mainExecutor,
                                         @Background Executor bgExecutor, ThemeOverlayApplier themeOverlayApplier,
-                                        SecureSettings secureSettings, WallpaperManager wallpaperManager,
-                                        UserManager userManager, DeviceProvisionedController deviceProvisionedController,
+                                        SecureSettings secureSettings, SystemSettings systemSettings,
+                                        WallpaperManager wallpaperManager, UserManager userManager,
+                                        DeviceProvisionedController deviceProvisionedController,
                                         UserTracker userTracker, DumpManager dumpManager, FeatureFlags featureFlags,
                                         @Main Resources resources, WakefulnessLifecycle wakefulnessLifecycle,
-                                        SystemPropertiesHelper systemPropertiesHelper, SystemSettings systemSettings,
+                                        SystemPropertiesHelper systemPropertiesHelper,
                                         ConfigurationController configurationController) {
         super(context, broadcastDispatcher, bgHandler, mainExecutor, bgExecutor,
-                themeOverlayApplier, secureSettings, wallpaperManager, userManager,
-                deviceProvisionedController, userTracker, dumpManager, featureFlags,
-                resources, wakefulnessLifecycle, systemSettings, configurationController);
+                themeOverlayApplier, secureSettings, systemSettings, wallpaperManager,
+                userManager, deviceProvisionedController, userTracker, dumpManager,
+                featureFlags, resources, wakefulnessLifecycle, configurationController);
         this.systemProperties = systemPropertiesHelper;
         this.resources = resources;
         configurationController.addCallback(new ConfigurationController.ConfigurationListener() {
