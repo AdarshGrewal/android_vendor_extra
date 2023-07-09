@@ -32,3 +32,6 @@ PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/extra/overlay
 DEVICE_PACKAGE_OVERLAYS += vendor/extra/overlay/common
 
 endif
+
+# MiuiCamera
+$(call inherit-product-if-exists, vendor/xiaomi/$(shell echo -n $(TARGET_PRODUCT) | sed -e 's/^[a-z]*_//g')-miuicamera/products/miuicamera.mk)
