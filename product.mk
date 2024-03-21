@@ -22,15 +22,6 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.com.google.ime.kb_pad_land_r=64
 endif
 
-# I hate Safety Net
-ifneq ("$(wildcard  vendor/extra/prebuilt/etc/ih8sn_$(subst lineage_,,$(TARGET_PRODUCT)).conf)","")
-PRODUCT_PACKAGES += \
-    ih8sn
-
-PRODUCT_COPY_FILES += \
-    vendor/extra/prebuilt/etc/ih8sn_$(subst lineage_,,$(TARGET_PRODUCT)).conf:/system/etc/ih8sn.conf
-endif
-
 # Overlay
 PRODUCT_PACKAGES += \
     ExtraFrameworksResTarget \
