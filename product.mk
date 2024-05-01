@@ -29,5 +29,8 @@ DEVICE_PACKAGE_OVERLAYS += vendor/extra/overlay/common
 
 endif
 
+PRODUCT_PACKAGES += \
+    ExtraPIFrameworksResTarget
+
 # MiuiCamera
 $(call inherit-product-if-exists, vendor/xiaomi/$(shell echo -n $(TARGET_PRODUCT) | sed -e 's/^[a-z]*_//g')-miuicamera/products/miuicamera.mk)
