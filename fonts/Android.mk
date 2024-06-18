@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+ifneq ($(BUILD_VANILLA), true)
 fonts_customization := $(TARGET_OUT_PRODUCT)/etc/fonts_customization.xml
 fonts_customization_dummy := $(TARGET_OUT_PRODUCT)/etc/fonts_customization.dummy.xml
 
@@ -15,3 +16,4 @@ $(fonts_customization_dummy): $(fonts_customization)
 	fi
 
 ALL_DEFAULT_INSTALLED_MODULES += $(fonts_customization_dummy)
+endif
