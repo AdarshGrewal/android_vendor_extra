@@ -6,13 +6,13 @@
 <resources>
     <!-- Build properties from a GMS certified device -->
     <string-array name="config_certifiedBuildProperties">
-        <item>PRODUCT:griffin_retcn</item>
-        <item>DEVICE:griffin</item>
-        <item>MANUFACTURER:motorola</item>
-        <item>BRAND:motorola</item>
-        <item>MODEL:XT1650-05</item>
-        <item>FINGERPRINT:motorola/griffin_retcn/griffin:6.0.1/MCC24.246-37/42:user/release-keys</item>
-        <item>VERSION.SECURITY_PATCH:2016-07-01</item>
-        <item>VERSION.DEVICE_INITIAL_SDK_INT:21</item>
+        <item>PRODUCT:WW_Phone</item>
+        <item>DEVICE:ASUS_Z012D</item>
+        <item>MANUFACTURER:asus</item>
+        <item>BRAND:asus</item>
+        <item>MODEL:ASUS_Z012D</item>
+        <item>FINGERPRINT:asus/WW_Phone/ASUS_Z012D:7.0/NRD90M/14.2015.1701.8-20170222:user/release-keys</item>
+        <item>VERSION.SECURITY_PATCH:2017-01-01</item>
+        <item>VERSION.DEVICE_INITIAL_SDK_INT:23</item>
     </string-array>
 </resources>
