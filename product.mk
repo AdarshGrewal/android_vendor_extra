@@ -7,12 +7,6 @@ PRODUCT_COPY_FILES += \
 
 $(call inherit-product, vendor/pixel/products/gms.mk)
 
-PRODUCT_PRODUCT_PROPERTIES += \
-    ro.com.google.ime.kb_pad_port_l=4 \
-    ro.com.google.ime.kb_pad_port_r=4 \
-    ro.com.google.ime.kb_pad_land_l=64 \
-    ro.com.google.ime.kb_pad_land_r=64
-
 # Overlay
 PRODUCT_PACKAGES += \
     ExtraFrameworksResTarget \
