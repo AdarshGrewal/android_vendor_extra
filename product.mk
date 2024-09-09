@@ -16,7 +16,6 @@ $(call inherit-product, vendor/pixel/products/gms.mk)
 
 # Overlay
 PRODUCT_PACKAGES += \
-    ExtraFrameworksResTarget \
     ExtraLineageSDKOverlay \
     ExtraSettingsResTarget
 

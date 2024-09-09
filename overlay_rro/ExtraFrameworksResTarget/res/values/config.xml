@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!--
-     Copyright (C) 2022 The Linux Foundation
-     SPDX-License-Identifier: BSD-3-Clause
--->
-<resources>
-    <!-- Name of the font family to use in the default lockscreen clock -->
-    <string name="config_clockFontFamily" translatable="false">google-sans-clock</string>
-</resources>
