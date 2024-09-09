@@ -6,13 +6,13 @@
 <resources>
     <!-- Build properties from a GMS certified device -->
     <string-array name="config_certifiedBuildProperties">
-        <item>PRODUCT:WW_Phone</item>
-        <item>DEVICE:ASUS_Z012D</item>
-        <item>MANUFACTURER:asus</item>
-        <item>BRAND:asus</item>
-        <item>MODEL:ASUS_Z012D</item>
-        <item>FINGERPRINT:asus/WW_Phone/ASUS_Z012D:7.0/NRD90M/14.2015.1701.8-20170222:user/release-keys</item>
-        <item>VERSION.SECURITY_PATCH:2017-01-01</item>
+        <item>PRODUCT:komodo_beta</item>
+        <item>DEVICE:komodo</item>
+        <item>MANUFACTURER:Google</item>
+        <item>BRAND:google</item>
+        <item>MODEL:Pixel 9 Pro XL</item>
+        <item>FINGERPRINT:google/komodo_beta/komodo:15/AP41.240726.010/12266677:user/release-keys</item>
+        <item>VERSION.SECURITY_PATCH:2024-08-05</item>
         <item>VERSION.DEVICE_INITIAL_SDK_INT:23</item>
     </string-array>
 </resources>
