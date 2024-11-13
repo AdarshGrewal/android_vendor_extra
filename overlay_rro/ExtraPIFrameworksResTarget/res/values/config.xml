@@ -6,13 +6,16 @@
 <resources>
     <!-- Build properties from a GMS certified device -->
     <string-array name="config_certifiedBuildProperties">
-        <item>PRODUCT:komodo_beta</item>
-        <item>DEVICE:komodo</item>
+        <item>PRODUCT:akita_beta</item>
+        <item>DEVICE:akita</item>
         <item>MANUFACTURER:Google</item>
         <item>BRAND:google</item>
-        <item>MODEL:Pixel 9 Pro XL</item>
-        <item>FINGERPRINT:google/komodo_beta/komodo:15/AP41.240726.010/12266677:user/release-keys</item>
-        <item>VERSION.SECURITY_PATCH:2024-08-05</item>
-        <item>VERSION.DEVICE_INITIAL_SDK_INT:23</item>
+        <item>MODEL:Pixel 8a</item>
+        <item>ID:AP41.240925.009</item>
+        <item>VERSION.RELEASE:15</item>
+        <item>VERSION.INCREMENTAL:12534705</item>
+        <item>FINGERPRINT:google/akita_beta/akita:15/AP41.240925.009/12534705:user/release-keys</item>
+        <item>VERSION.SECURITY_PATCH:2024-10-05</item>
+        <item>VERSION.DEVICE_INITIAL_SDK_INT:21</item>
     </string-array>
 </resources>
