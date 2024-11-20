@@ -17,10 +17,8 @@ $(call inherit-product, vendor/pixel/products/gms.mk)
 # Overlay
 PRODUCT_PACKAGES += \
     ExtraLineageSDKOverlay \
-    ExtraSettingsResTarget
-
-PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS += vendor/extra/overlay
-DEVICE_PACKAGE_OVERLAYS += vendor/extra/overlay/common
+    ExtraSettingsResTarget \
+    ExtraUpdaterOverlay_GMS
 
 endif
 
@@ -38,8 +36,10 @@ PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.biometrics.face.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/permissions/android.hardware.biometrics.face.xml
 endif
 
+# Overlay
 PRODUCT_PACKAGES += \
-    ExtraPIFrameworksResTarget
+    ExtraPIFrameworksResTarget \
+    ExtraUpdaterOverlay_GMS
 
 # MiuiCamera
 $(call inherit-product-if-exists, vendor/xiaomi/$(shell echo -n $(TARGET_PRODUCT) | sed -e 's/^[a-z]*_//g')-miuicamera/products/miuicamera.mk)

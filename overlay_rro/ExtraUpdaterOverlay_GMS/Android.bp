@@ -1,0 +1,4 @@
+runtime_resource_overlay {
+    name: "ExtraUpdaterOverlay_GMS",
+    product_specific: true,
+}
