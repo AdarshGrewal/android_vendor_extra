@@ -109,7 +109,19 @@ release() {
         --argjson size "${size}" \
         --arg version "${version}" \
         --arg release_url "$release_url" \
-        '{datetime: $datetime, filename: $filename, id: $id, romtype: $romtype, size: $size, version: $version, url: $release_url}')
+        '{
+            response: [
+                {
+                    datetime: $datetime,
+                    filename: $filename,
+                    id: $id,
+                    romtype: $romtype,
+                    size: $size,
+                    url: $release_url,
+                    version: $version
+                }
+            ]
+        }')
 
     echo -e "\e[32m[INFO]\e[0m Generated OTA JSON entry:"
     echo "${ota_entry}"
