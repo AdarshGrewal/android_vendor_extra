@@ -154,37 +154,38 @@ release() {
     rsync -Ph ${OUT}/${filename} adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/"${tag_name}"/
     rsync -Ph ${OUT}/${filename}.sha256sum adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/"${tag_name}"/
 
-    for image in $extraimages; do
-        case $image in
-            initbootimage)
-                if [ -f "${OUT}/init_boot.img" ]; then
-                    echo -e "\e[32m[INFO]\e[0m Uploading init_boot.img"
-                    rsync -Ph ${OUT}/init_boot.img adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/"${tag_name}"/
+    declare -A image_map=(
+        ["initbootimage"]="${OUT}/init_boot.img"
+        ["vendorbootimage"]="${OUT}/vendor_boot.img"
+        ["recoveryimage"]="${OUT}/recovery.img"
+    )
+
+    if [ -n "${extraimages}" ]; then
+        extraimages=$(echo "${extraimages}" | xargs)
+        echo "[INFO] Initial extraimages value: ${extraimages}"
+
+        images=$(echo "${extraimages}" | grep -oP '\b\w*image\w*\b')
+
+        echo "[INFO] Processing extra images:"
+        echo "${images}"
+
+        while IFS= read -r image; do
+            if [[ -v "image_map[${image}]" ]]; then
+                image_path="${image_map[${image}]}"
+
+                if [ -f "${image_path}" ]; then
+                    echo "[INFO] Uploading ${image_path}"
+                    rsync -Ph "${image_path}" "adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/${tag_name}/"
                 else
-                    echo -e "\e[31m[ERROR]\e[0m init_boot.img not found in ${OUT}"
+                    echo "[ERROR] ${image_path} not found in ${OUT}"
                 fi
-                ;;
-            vendorbootimage)
-                if [ -f "${OUT}/vendor_boot.img" ]; then
-                    echo -e "\e[32m[INFO]\e[0m Uploading vendor_boot.img"
-                    rsync -Ph ${OUT}/vendor_boot.img adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/"${tag_name}"/
-                else
-                    echo -e "\e[31m[ERROR]\e[0m vendor_boot.img not found in ${OUT}"
-                fi
-                ;;
-            recoveryimage)
-                if [ -f "${OUT}/recovery.img" ]; then
-                    echo -e "\e[32m[INFO]\e[0m Uploading recovery.img"
-                    rsync -Ph ${OUT}/recovery.img adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/"${tag_name}"/
-                else
-                    echo -e "\e[31m[ERROR]\e[0m recovery.img not found in ${OUT}"
-                fi
-                ;;
-            *)
-                echo -e "\e[31m[ERROR]\e[0m Unknown extra image: $image"
-                ;;
-        esac
-    done
+            else
+                echo "[ERROR] Unknown extra image: $image"
+            fi
+        done <<< "${images}"
+    else
+        echo "[INFO] No extra images to process."
+    fi
 
     echo -e "\e[32m[INFO]\e[0m Release created successfully!"
 }
