@@ -35,7 +35,7 @@ release() {
     
     if [[ "${device}" == "zircon" ]]; then
         sf_project_name="zirconrandom"
-        extraimages="vendorbootimage" 
+        extraimages="initbootimage vendorbootimage" 
     fi
 
     if [ -z "${sf_project_name}" ]; then
@@ -156,6 +156,14 @@ release() {
 
     for image in $extraimages; do
         case $image in
+            initbootimage)
+                if [ -f "${OUT}/init_boot.img" ]; then
+                    echo -e "\e[32m[INFO]\e[0m Uploading init_boot.img"
+                    rsync -Ph ${OUT}/init_boot.img adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/"${tag_name}"/
+                else
+                    echo -e "\e[31m[ERROR]\e[0m init_boot.img not found in ${OUT}"
+                fi
+                ;;
             vendorbootimage)
                 if [ -f "${OUT}/vendor_boot.img" ]; then
                     echo -e "\e[32m[INFO]\e[0m Uploading vendor_boot.img"
