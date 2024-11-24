@@ -8,4 +8,4 @@ SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += \
     vendor/extra/sepolicy/private
 
 # MiuiCamera
--include vendor/xiaomi/$(PRODUCT_DEVICE)-miuicamera/products/board.mk
+-include device/xiaomi/$(PRODUCT_DEVICE)-miuicamera/BoardConfig.mk
