@@ -155,6 +155,7 @@ release() {
     rsync -Ph ${OUT}/${filename}.sha256sum adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/"${tag_name}"/
 
     declare -A image_map=(
+        ["dtboimage"]="${OUT}/dtbo.img"
         ["initbootimage"]="${OUT}/init_boot.img"
         ["vendorbootimage"]="${OUT}/vendor_boot.img"
         ["recoveryimage"]="${OUT}/recovery.img"
@@ -172,10 +173,27 @@ release() {
         while IFS= read -r image; do
             if [[ -v "image_map[${image}]" ]]; then
                 image_path="${image_map[${image}]}"
-
                 if [ -f "${image_path}" ]; then
-                    echo "[INFO] Uploading ${image_path}"
-                    rsync -Ph "${image_path}" "adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/${tag_name}/"
+                    remote_file="$(basename "${image_path}")"
+                    remote_path="/home/frs/project/${sf_project_name}/los/${tag_name}/${remote_file}"
+                    echo "[INFO] Checking size of ${remote_file} on the server at path: ${remote_path}"
+                    rsync_output=$(rsync --dry-run -avz "adarshgrewal@frs.sourceforge.net:${remote_path}" 2>&1)
+
+                    if echo "${rsync_output}" | grep -q 'No such file or directory'; then
+                        echo "[INFO] ${remote_file} not found on the server at path: ${remote_path}. Proceeding with upload."
+                        rsync -Ph "${image_path}" "adarshgrewal@frs.sourceforge.net:${remote_path}"
+                    else
+                        remote_size=$(echo "${rsync_output}" | grep -oP '(\d+) bytes' | awk '{print $1}')
+                        
+                        if [ -n "${remote_size}" ]; then
+                            echo "[INFO] Found ${remote_file} on server at path ${remote_path} with size: ${remote_size} bytes."
+                            if [ "${remote_size}" -gt 0 ]; then
+                                echo "[INFO] ${remote_file} already exists and is non-zero. Skipping upload."
+                            fi
+                        else
+                            echo "[ERROR] Failed to extract size for ${remote_file} from rsync output."
+                        fi
+                    fi
                 else
                     echo "[ERROR] ${image_path} not found in ${OUT}"
                 fi
