@@ -172,10 +172,15 @@ release() {
         while IFS= read -r image; do
             if [[ -v "image_map[${image}]" ]]; then
                 image_path="${image_map[${image}]}"
-
                 if [ -f "${image_path}" ]; then
-                    echo "[INFO] Uploading ${image_path}"
-                    rsync -Ph "${image_path}" "adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/${tag_name}/"
+                    remote_file="$(basename "${image_path}")"
+                    sftp adarshgrewal@frs.sourceforge.net <<< "ls /home/frs/project/${sf_project_name}/los/${tag_name}/${remote_file}" &>/dev/null
+                    if [ $? -eq 0 ]; then
+                        echo "[INFO] ${remote_file} already exists on the server. Skipping upload."
+                    else
+                        echo "[INFO] Uploading ${image_path}"
+                        rsync -Ph "${image_path}" "adarshgrewal@frs.sourceforge.net:/home/frs/project/${sf_project_name}/los/${tag_name}/"
+                    fi
                 else
                     echo "[ERROR] ${image_path} not found in ${OUT}"
                 fi
