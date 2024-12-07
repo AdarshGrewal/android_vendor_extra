@@ -27,6 +27,14 @@ enable_gms() {
     fi
 }
 
+enable_thin_lto() {
+    local enable_thin_lto=${1:-true}
+    if [[ "${enable_thin_lto}" == "true" ]]; then
+        export KERNEL_LTO=thin
+        echo -e "\e[32m[INFO]\e[0m Forcing thin lto."
+    fi
+}
+
 release() {
     device=${1}
     project="$(basename ${ANDROID_BUILD_TOP})"
@@ -197,3 +205,4 @@ release() {
 
 enable_ccache
 enable_gms
+enable_thin_lto
