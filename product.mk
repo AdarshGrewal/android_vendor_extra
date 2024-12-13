@@ -19,7 +19,9 @@ PRODUCT_PACKAGES += \
     ExtraLineageSDKOverlay \
     ExtraSettingsResTarget \
     ExtraUpdaterOverlay_GMS
-
+else
+PRODUCT_PACKAGES += \
+    ExtraUpdaterOverlay
 endif
 
 # Face Unlock
@@ -38,8 +40,7 @@ endif
 
 # Overlay
 PRODUCT_PACKAGES += \
-    ExtraPIFrameworksResTarget \
-    ExtraUpdaterOverlay_GMS
+    ExtraPIFrameworksResTarget
 
 # MiuiCamera
 $(call inherit-product-if-exists, device/xiaomi/$(shell echo -n $(TARGET_PRODUCT) | sed -e 's/^[a-z]*_//g')-miuicamera/device.mk)
