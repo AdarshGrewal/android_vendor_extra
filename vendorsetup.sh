@@ -35,6 +35,11 @@ enable_thin_lto() {
     fi
 }
 
+telegram() {
+    local message="$1"
+    /home/adarsh/telegram.sh/telegram "$message"
+}
+
 release() {
     device=${1}
     project="$(basename ${ANDROID_BUILD_TOP})"
@@ -48,6 +53,7 @@ release() {
 
     if [ -z "${sf_project_name}" ]; then
         echo -e "\e[31m[ERROR]\e[0m Project name is not set. Skipping release."
+        telegram "[ERROR] Project name is not set. Skipping release."
         exit 1
     fi
 
@@ -60,6 +66,8 @@ release() {
     fi
 
     echo -e "\e[32m[INFO]\e[0m Starting release for device: ${device} (${type} variant)"
+    telegram "[INFO] Starting release for device: ${device} (${type} variant)"
+
     [[ -d "${ANDROID_BUILD_TOP}/ota" ]] && rm -rf "${ANDROID_BUILD_TOP}/ota"
     git clone git@github.com:loonage/ota.git "${ANDROID_BUILD_TOP}/ota"
     cd "${ANDROID_BUILD_TOP}/ota"
@@ -77,9 +85,11 @@ release() {
 
     if [[ -n "${extraimages}" ]]; then
         echo -e "\e[32m[INFO]\e[0m Running m bacon with extraimages for ${device}"
-        m  "${extraimages}" bacon
+        telegram "[INFO] Running m bacon with extraimages for ${device}"
+        m "${extraimages}" bacon
     else
         echo -e "\e[32m[INFO]\e[0m Running m bacon for ${device}"
+        telegram "[INFO] Running m bacon for ${device}"
         m bacon
     fi
 
@@ -98,6 +108,7 @@ release() {
 
     if [ -z "$tag_name" ]; then
         echo -e "\e[31m[ERROR]\e[0m Failed to extract tag_name (date) from filename: ${filename}"
+        telegram "[ERROR] Failed to extract tag_name (date) from filename: ${filename}"
         exit 1
     fi
 
@@ -133,6 +144,7 @@ release() {
 
     echo -e "\e[32m[INFO]\e[0m Generated OTA JSON entry:"
     echo "${ota_entry}"
+    telegram "[INFO] Generated OTA JSON entry for ${device_variant}: ${ota_entry}"
 
     rm -f "${device_variant}.json"
     echo "${ota_entry}" > "${device_variant}.json"
@@ -144,14 +156,24 @@ release() {
         pr_branch="ota-update-$(date +%Y%m%d%H%M%S)"
         git checkout -b "${pr_branch}"
         git push origin "${pr_branch}"
-        gh pr create --base los-22 --head "${pr_branch}" --title "OTA update for ${device_variant}" --body "This PR contains the OTA update for ${device_variant}."
+        pr_url=$(gh pr create --base los-22 --head "${pr_branch}" --title "OTA update for ${device_variant}" --body "This PR contains the OTA update for ${device_variant}." | grep -oP 'https://github.com[^\s]+')
+
+        if [[ -n "${pr_url}" ]]; then
+            echo -e "\e[32m[INFO]\e[0m PR created for ${device_variant}: $pr_url"
+            telegram "[INFO] PR created for ${device_variant}: $pr_url"
+        else
+            echo -e "\e[31m[ERROR]\e[0m Failed to retrieve PR URL. PR creation may have failed."
+            telegram "[ERROR] Failed to retrieve PR URL. PR creation may have failed."
+        fi
     else
         echo -e "\e[31m[ERROR]\e[0m No commits found in ${pr_branch}. Aborting PR creation."
+        telegram "[ERROR] No commits found in ${pr_branch}. Aborting PR creation."
         exit 1
     fi
 
     cd ..
     echo -e "\e[32m[INFO]\e[0m Deleting the OTA repo from ${ANDROID_BUILD_TOP}/ota."
+    telegram "[INFO] Deleting the OTA repo from ${ANDROID_BUILD_TOP}/ota."
     rm -rf "${ANDROID_BUILD_TOP}/ota"
 
     {
@@ -172,11 +194,14 @@ release() {
     if [ -n "${extraimages}" ]; then
         extraimages=$(echo "${extraimages}" | xargs)
         echo "[INFO] Initial extraimages value: ${extraimages}"
+        telegram "[INFO] Initial extraimages value: ${extraimages}"
 
         images=$(echo "${extraimages}" | grep -oP '\b\w*image\w*\b')
 
         echo "[INFO] Processing extra images:"
         echo "${images}"
+        telegram "[INFO] Processing extra images:"
+        telegram "${images}"
 
         while IFS= read -r image; do
             if [[ -v "image_map[${image}]" ]]; then
@@ -185,35 +210,45 @@ release() {
                     remote_file="$(basename "${image_path}")"
                     remote_path="/home/frs/project/${sf_project_name}/los/${tag_name}/${remote_file}"
                     echo "[INFO] Checking size of ${remote_file} on the server at path: ${remote_path}"
+                    telegram "[INFO] Checking size of ${remote_file} on the server at path: ${remote_path}"
                     rsync_output=$(rsync --dry-run -avz "adarshgrewal@frs.sourceforge.net:${remote_path}" 2>&1)
 
                     if echo "${rsync_output}" | grep -q 'No such file or directory'; then
                         echo "[INFO] ${remote_file} not found on the server at path: ${remote_path}. Proceeding with upload."
+                        telegram "[INFO] ${remote_file} not found on the server at path: ${remote_path}. Proceeding with upload."
                         rsync -Ph "${image_path}" "adarshgrewal@frs.sourceforge.net:${remote_path}"
                     else
                         remote_size=$(echo "${rsync_output}" | grep -oP '(\d+) bytes' | awk '{print $1}')
                         
                         if [ -n "${remote_size}" ]; then
                             echo "[INFO] Found ${remote_file} on server at path ${remote_path} with size: ${remote_size} bytes."
+                            telegram "[INFO] Found ${remote_file} on server at path ${remote_path} with size: ${remote_size} bytes."
                             if [ "${remote_size}" -gt 0 ]; then
                                 echo "[INFO] ${remote_file} already exists and is non-zero. Skipping upload."
+                                telegram "[INFO] ${remote_file} already exists and is non-zero. Skipping upload."
                             fi
                         else
                             echo "[ERROR] Failed to extract size for ${remote_file} from rsync output."
+                            telegram "[ERROR] Failed to extract size for ${remote_file} from rsync output."
                         fi
                     fi
                 else
                     echo "[ERROR] ${image_path} not found in ${OUT}"
+                    telegram "[ERROR] ${image_path} not found in ${OUT}"
                 fi
             else
                 echo "[ERROR] Unknown extra image: $image"
+                telegram "[ERROR]Unknown extra image: $image"
             fi
         done <<< "${images}"
     else
         echo "[INFO] No extra images to process."
+        telegram "[INFO] No extra images to process for ${device_variant}."
+
     fi
 
     echo -e "\e[32m[INFO]\e[0m Release created successfully!"
+    telegram "[INFO] Release created successfully for ${device_variant}."
 }
 
 enable_ccache
