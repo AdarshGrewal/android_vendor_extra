@@ -1,4 +1,3 @@
-# Google Apps
 ifneq ($(BUILD_VANILLA), true)
 # Gsans
 include vendor/google_sans/board.mk
@@ -8,12 +7,11 @@ include vendor/pixel_clocks/board.mk
 
 # Pixel Launcher
 include vendor/pixel_launcher/board.mk
-
 endif
+
+# MiuiCamera
+-include device/xiaomi/$(PRODUCT_DEVICE)-miuicamera/BoardConfig.mk
 
 # Sepolicy
 SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += \
     vendor/extra/sepolicy/private
-
-# MiuiCamera
--include device/xiaomi/$(PRODUCT_DEVICE)-miuicamera/BoardConfig.mk
