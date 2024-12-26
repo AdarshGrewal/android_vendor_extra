@@ -1,5 +1,8 @@
 # Google Apps
 ifneq ($(BUILD_VANILLA), true)
+# Gsans
+include vendor/google_sans/board.mk
+
 endif
 
 # Sepolicy
