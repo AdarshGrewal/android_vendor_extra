@@ -6,6 +6,9 @@ include vendor/google_sans/board.mk
 # Pixel clocks
 include vendor/pixel_clocks/board.mk
 
+# Pixel Launcher
+include vendor/pixel_launcher/board.mk
+
 endif
 
 # Sepolicy

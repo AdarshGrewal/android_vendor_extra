@@ -6,6 +6,9 @@ $(call inherit-product, vendor/google_sans/product.mk)
 # Pixel clocks
 $(call inherit-product, vendor/pixel_clocks/product.mk)
 
+# Pixel launcher
+$(call inherit-product, vendor/pixel_launcher/product.mk)
+
 # Overlay
 PRODUCT_PACKAGES += \
     ExtraLineageSDKOverlay \
