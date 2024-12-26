@@ -29,7 +29,6 @@ $(call inherit-product-if-exists, device/xiaomi/$(shell echo -n $(TARGET_PRODUCT
 # Overlay
 ifneq ($(BUILD_VANILLA), true)
 PRODUCT_PACKAGES += \
-    ExtraLineageSDKOverlay \
     ExtraSettingsResTarget \
     ExtraUpdaterOverlay_GMS
 endif
