@@ -3,6 +3,9 @@ ifneq ($(BUILD_VANILLA), true)
 # Gsans
 $(call inherit-product, vendor/google_sans/product.mk)
 
+# Pixel clocks
+$(call inherit-product, vendor/pixel_clocks/product.mk)
+
 # Overlay
 PRODUCT_PACKAGES += \
     ExtraLineageSDKOverlay \

@@ -3,6 +3,9 @@ ifneq ($(BUILD_VANILLA), true)
 # Gsans
 include vendor/google_sans/board.mk
 
+# Pixel clocks
+include vendor/pixel_clocks/board.mk
+
 endif
 
 # Sepolicy
