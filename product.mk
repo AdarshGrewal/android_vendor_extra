@@ -12,8 +12,6 @@ PRODUCT_COPY_FILES += \
     vendor/extra/prebuilt/common/fonts/GoogleSans-Italic.ttf:$(TARGET_COPY_OUT_PRODUCT)/fonts/GoogleSans-Italic.ttf \
     vendor/extra/prebuilt/common/fonts/GoogleSans-Regular.ttf:$(TARGET_COPY_OUT_PRODUCT)/fonts/GoogleSans-Regular.ttf
 
-$(call inherit-product, vendor/pixel/products/gms.mk)
-
 # Overlay
 PRODUCT_PACKAGES += \
     ExtraLineageSDKOverlay \

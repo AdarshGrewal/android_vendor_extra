@@ -1,6 +1,5 @@
 # Google Apps
 ifneq ($(BUILD_VANILLA), true)
-include vendor/pixel/products/board.mk
 endif
 
 # Sepolicy
