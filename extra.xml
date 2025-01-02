@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remote fetch="ssh://git@gitlab.incom.co:22/" name="gl-ssh" />
+  <remote fetch="https://gitlab.com/" name="gitlab" />
+
+  <!-- partner_gms -->
+  <project path="vendor/partner_gms" name="oddsolutions-gms/proprietary_vendor_partner_gms" remote="gl-ssh" revision="lineage-22.0" clone-depth="1" />
+
+  <!-- Face unlock -->
+  <project path="packages/apps/FaceUnlock" remote="gitlab" name="AdarshGrewal/android_packages_apps_FaceUnlock" revision="lineage-22.1" />
+
+  <!-- google/pixel apps -->
+  <project path="vendor/pixel_clocks" remote="gitlab" name="AdarshGrewal/proprietary_vendor_pixel_clocks" revision="lineage-22.1" />
+  <project path="vendor/pixel_launcher" remote="gitlab" name="AdarshGrewal/proprietary_vendor_pixel_launcher" revision="lineage-22.1" />
+  <project path="vendor/google_sans" remote="gitlab" name="AdarshGrewal/proprietary_vendor_google_sans" revision="lineage-22.1" />
+</manifest>
