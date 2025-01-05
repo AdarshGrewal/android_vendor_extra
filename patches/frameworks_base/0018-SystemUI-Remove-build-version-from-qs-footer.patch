@@ -1,0 +1,62 @@
+From 4be1a8049bd9aeab070cc091e326d8eb437b203a Mon Sep 17 00:00:00 2001
+From: jhenrique09 <jhenrique09.mcz@hotmail.com>
+Date: Tue, 10 Sep 2019 22:48:14 -0300
+Subject: [PATCH 18/19] SystemUI: Remove build version from qs footer
+
+Change-Id: I7bb8f1422765d9e09bd50b43fa1e9849fe006344
+---
+ .../src/com/android/systemui/qs/QSFooterView.java    | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/qs/QSFooterView.java b/packages/SystemUI/src/com/android/systemui/qs/QSFooterView.java
+index 5a872d699f35..87bb4292cf15 100644
+--- a/packages/SystemUI/src/com/android/systemui/qs/QSFooterView.java
++++ b/packages/SystemUI/src/com/android/systemui/qs/QSFooterView.java
+@@ -59,14 +59,14 @@ public class QSFooterView extends FrameLayout {
+     @Nullable
+     private OnClickListener mExpandClickListener;
+ 
+-    private final ContentObserver mDeveloperSettingsObserver = new ContentObserver(
++    /*private final ContentObserver mDeveloperSettingsObserver = new ContentObserver(
+             new Handler(mContext.getMainLooper())) {
+         @Override
+         public void onChange(boolean selfChange, Uri uri) {
+             super.onChange(selfChange, uri);
+             setBuildText();
+         }
+-    };
++    };*/
+ 
+     public QSFooterView(Context context, AttributeSet attrs) {
+         super(context, attrs);
+@@ -81,7 +81,7 @@ public class QSFooterView extends FrameLayout {
+ 
+         updateResources();
+         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
+-        setBuildText();
++        //setBuildText();
+     }
+ 
+     private void setBuildText() {
+@@ -175,15 +175,15 @@ public class QSFooterView extends FrameLayout {
+     @Override
+     protected void onAttachedToWindow() {
+         super.onAttachedToWindow();
+-        mContext.getContentResolver().registerContentObserver(
++        /*mContext.getContentResolver().registerContentObserver(
+                 Settings.Global.getUriFor(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED), false,
+-                mDeveloperSettingsObserver, UserHandle.USER_ALL);
++                mDeveloperSettingsObserver, UserHandle.USER_ALL);*/
+     }
+ 
+     @Override
+     @VisibleForTesting
+     public void onDetachedFromWindow() {
+-        mContext.getContentResolver().unregisterContentObserver(mDeveloperSettingsObserver);
++        //mContext.getContentResolver().unregisterContentObserver(mDeveloperSettingsObserver);
+         super.onDetachedFromWindow();
+     }
+ 
+-- 
+2.47.1
+

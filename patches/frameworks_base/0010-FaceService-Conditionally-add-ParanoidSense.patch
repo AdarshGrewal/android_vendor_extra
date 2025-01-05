@@ -1,0 +1,72 @@
+From 4ff2c0a8d9a301b88d8fb6c9799cf3b3961b50f5 Mon Sep 17 00:00:00 2001
+From: someone5678 <someone5678@users.noreply.github.com>
+Date: Mon, 8 Jan 2024 18:42:13 +0900
+Subject: [PATCH 10/19] FaceService: Conditionally add ParanoidSense
+
+* We allows devices to use their own FaceService as ParanoidSense has weak modality
+* To make above impl complete, conditionally add ParanoidSense and un-comment AIDL provider support
+
+Ref:
+TheParasiteProject/vendor_aosp@72d5897
+
+Change-Id: I7321580b87499f4020d3b080779e2f9cb1a6fce6
+---
+ .../biometrics/sensors/face/FaceService.java  | 31 +++++++++----------
+ 1 file changed, 15 insertions(+), 16 deletions(-)
+
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
+index 5b27d9f66881..1a9be1e6a953 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
+@@ -670,19 +670,17 @@ public class FaceService extends SystemService {
+ 
+         private List<ServiceProvider> getSenseProviders() {
+             final List<ServiceProvider> providers = new ArrayList<>();
+-            if (SenseUtils.canUseProvider()) {
+-                FaceSensorPropertiesInternal props = new FaceSensorPropertiesInternal(
+-                        SenseProvider.DEVICE_ID,
+-                        SensorProperties.STRENGTH_WEAK,
+-                        1, /** maxEnrollmentsPerUser **/
+-                        new ArrayList(),
+-                        FaceSensorProperties.TYPE_RGB,
+-                        false, /** supportsFaceDetection **/
+-                        false, /** supportsSelfIllumination **/
+-                        false); /** resetLockoutRequiresChallenge **/
+-                SenseProvider provider = new SenseProvider(getContext(), mBiometricStateCallback, props, mLockoutResetDispatcher);
+-                providers.add(provider);
+-            }
++            FaceSensorPropertiesInternal props = new FaceSensorPropertiesInternal(
++                    SenseProvider.DEVICE_ID,
++                    SensorProperties.STRENGTH_WEAK,
++                    1, /** maxEnrollmentsPerUser **/
++                    new ArrayList(),
++                    FaceSensorProperties.TYPE_RGB,
++                    false, /** supportsFaceDetection **/
++                    false, /** supportsSelfIllumination **/
++                    false); /** resetLockoutRequiresChallenge **/
++            SenseProvider provider = new SenseProvider(getContext(), mBiometricStateCallback, props, mLockoutResetDispatcher);
++            providers.add(provider);
+             return providers;
+         }
+ 
+@@ -701,13 +699,14 @@ public class FaceService extends SystemService {
+         private List<ServiceProvider> getProviders(
+                 FaceSensorConfigurations faceSensorConfigurations) {
+             final List<ServiceProvider> providers = new ArrayList<>();
+-            /*
++            if (SenseUtils.canUseProvider()) {
++                providers.addAll(getSenseProviders());
++                return providers;
++            }
+             final Pair<String, SensorProps[]> filteredSensorProps = filterAvailableHalInstances(
+                             faceSensorConfigurations);
+             providers.add(mFaceProviderFunction.getFaceProvider(filteredSensorProps,
+                     faceSensorConfigurations.getResetLockoutRequiresChallenge()));
+-            */
+-            providers.addAll(getSenseProviders());
+             return providers;
+         }
+ 
+-- 
+2.47.1
+

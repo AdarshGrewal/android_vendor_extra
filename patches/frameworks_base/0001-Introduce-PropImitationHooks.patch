@@ -1,0 +1,439 @@
+From 68f5caa48f77f28fef21c4f714f8e9d32b487296 Mon Sep 17 00:00:00 2001
+From: Omkar Chandorkar <gotenksIN@aospa.co>
+Date: Thu, 1 Sep 2022 17:18:58 +0530
+Subject: [PATCH 01/19] Introduce PropImitationHooks
+
+This is a squash of the following commits.
+
+  Author: Omkar Chandorkar <gotenksIN@aospa.co>
+  Date:   Thu Sep 1 17:18:58 2022 +0530
+
+      Introduce PropImitationHooks
+
+      - A minimal implementation to pass CTS and Play Integrity while
+        loading correct ARCore profiles if existing
+
+      - Loosely inspired by PixelPropUtils from
+        https://github.com/PixelExperience/frameworks_base/blob/twelve/core/java/com/android/internal/util/custom/PixelPropsUtils.java
+
+      - Thanks Danny for original idea at
+        https://github.com/ProtonAOSP/android_frameworks_base/blob/sc-qpr3/core/java/com/android/internal/gmscompat/AttestationHooks.java
+
+      - Thanks Dyneteve for fixing Play Integrity API at
+        https://github.com/hentaiOS/platform_frameworks_base/commit/c9a086f9b635bf4e3e61fbd501ade464f8f5b713
+
+      Change-Id: I6937258c8297aa909fcdb3b40195cbd6dc0f869b
+      Co-authored-by: Chris Crawford <chriscrawford893@gmail.com>
+      Co-authored-by: jhenrique09 <jhenrique09.mcz@hotmail.com>
+      Co-authored-by: Danny Lin <danny@kdrag0n.dev>
+      Co-authored-by: Adithya R <gh0strider.2k18.reborn@gmail.com>
+      Signed-off-by: Omkar Chandorkar <gotenksIN@aospa.co>
+
+  Author: Danny Lin <danny@kdrag0n.dev>
+  Date:   Fri Oct 14 09:53:12 2022 +0200
+
+      PIHooks: Alter model name to avoid SafetyNet HW attestation
+
+      As of September 2, Google is enforcing SafetyNet's previously
+      opportunistic hardware-backed attestation based on device information.
+      Append a space to the device model name in order to avoid such
+      enforcement.
+
+      Change-Id: Ib7779e0aae40cab3730a56785e9231896917ab0a
+      [ghostrider-reborn: adapt to PIHooks, use invisible space]
+      Signed-off-by: Adithya R <gh0strider.2k18.reborn@gmail.com>
+
+  Author: jhenrique09 <jhsv09@gmail.com>
+  Date:   Fri Nov 4 15:40:04 2022 -0300
+
+      PIHooks: Get package name from context instead of app
+
+      11-04 08:48:39.039 11637 11637 E AndroidRuntime: FATAL EXCEPTION: main
+      11-04 08:48:39.039 11637 11637 E AndroidRuntime: Process: com.NextFloor.DestinyChild, PID: 11637
+      11-04 08:48:39.039 11637 11637 E AndroidRuntime: java.lang.RuntimeException: Unable to get provider androidx.startup.InitializationProvider: androidx.startup.StartupException: android.content.pm.PackageManager$NameNotFoundException: ComponentInfo{/androidx.startup.InitializationProvider}
+      11-04 08:48:39.039 11637 11637 E AndroidRuntime:   at android.app.ActivityThread.installProvider(ActivityThread.java:7488)
+
+      Change-Id: Icb12f938fe0fca710f8f9d29182d0134ba3c63eb
+      [ghostrider-reborn: adapt to PIHooks]
+      Signed-off-by: Adithya R <gh0strider.2k18.reborn@gmail.com>
+
+  Author: Adithya R <gh0strider.2k18.reborn@gmail.com>
+  Date:   Thu Feb 9 11:41:44 2023 +0530
+
+      PIHooks: Make CTS/Play Integrity pass again
+
+      The logic behind SafetyNet CTS and Play Integrity has been updated today
+      it now checks the product and model names against the fingerprint and if
+      they do not match the CTS profile will fail.
+
+      Based on https://github.com/hentaiOS/platform_frameworks_base/commit/32cd021753626ae2dc0f72d222ac4fd734f3a8aa
+
+      Co-authored-by: Dyneteve <dyneteve@hentaios.com>
+      Change-Id: If3a865849c7c99a9c7080114ba94a8f8878bb4f2
+
+  Author: Adithya R <gh0strider.2k18.reborn@gmail.com>
+  Date:   Thu Jun 8 16:55:44 2023 +0530
+
+      PIHooks: Un-spoof GMS while adding google account
+
+      GMS uses its DroidGuard service (the same that's used for safetynet)
+      to get the device name from the build fingerprint, which from our
+      current certified props, is Pixel XL. The device name after Google
+      login shows up in the login alert accordingly as Pixel XL, which is
+      inconvenient especially when you have multiple devices on the same ROM.
+
+      By restarting the DroidGuard service process (gms.unstable) as soon as
+      the user starts adding Google account (i.e when the GMS add account
+      activity is started and moved to the top of the task stack), we can
+      skip spoofing to certified props in this instance. When the user
+      stops/finishes adding account (GMS add account activity is no longer
+      at the top of the task stack), restart the process again, this time
+      spoofing to certified props in order to be ready for safetynet.
+
+      This ensures while adding a Google account, GMS reads the original
+      properties of the device and labels the device with its original name,
+      while in any other situation GMS reads certified properties required
+      to pass SafetyNet/Play Integrity.
+
+      Test:
+      - Add google account from setup wizard, settings, any other app
+      - Observe correct device name in gmail login alert
+      - SafetyNet (basic, CTS), Play Integrity (basic, device) passes.
+
+      Change-Id: Ia5463f220a8262f7963fc5b2640a7a5311a73210
+
+  Author: Adithya R <gh0strider.2k18.reborn@gmail.com>
+  Date:   Mon Sep 19 17:33:34 2022 +0530
+
+      PIHooks: Allow spoofing device model for Netflix
+
+      It can be used to unlock HDR for devices that don't
+      have it by default.
+
+      Set config_netflixSpoofModel to the desired model in
+      device overlay.
+
+      Change-Id: I5d520de143c16e9c6fd10978244f598bd64b4d0a
+
+Change-Id: I7844dc9ac8e2f927e6bb565ee218210b194e6ef0
+---
+ core/java/android/app/Instrumentation.java    |   3 +
+ .../internal/util/PropImitationHooks.java     | 180 ++++++++++++++++++
+ core/res/res/values/extra_config.xml          |  18 ++
+ core/res/res/values/extra_symbols.xml         |   7 +
+ .../keystore2/AndroidKeyStoreSpi.java         |   3 +
+ .../server/wm/ActivityTaskManagerService.java |   9 +-
+ 6 files changed, 218 insertions(+), 2 deletions(-)
+ create mode 100644 core/java/com/android/internal/util/PropImitationHooks.java
+ create mode 100644 core/res/res/values/extra_config.xml
+ create mode 100644 core/res/res/values/extra_symbols.xml
+
+diff --git a/core/java/android/app/Instrumentation.java b/core/java/android/app/Instrumentation.java
+index 93a9489849af..9c0490795f39 100644
+--- a/core/java/android/app/Instrumentation.java
++++ b/core/java/android/app/Instrumentation.java
+@@ -62,6 +62,7 @@ import android.view.Window;
+ import android.view.WindowManagerGlobal;
+ 
+ import com.android.internal.content.ReferrerIntent;
++import com.android.internal.util.PropImitationHooks;
+ 
+ import java.io.File;
+ import java.lang.annotation.Retention;
+@@ -1353,6 +1354,7 @@ public class Instrumentation {
+         Application app = getFactory(context.getPackageName())
+                 .instantiateApplication(cl, className);
+         app.attach(context);
++        PropImitationHooks.setProps(context);
+         return app;
+     }
+     
+@@ -1370,6 +1372,7 @@ public class Instrumentation {
+             ClassNotFoundException {
+         Application app = (Application)clazz.newInstance();
+         app.attach(context);
++        PropImitationHooks.setProps(context);
+         return app;
+     }
+ 
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+new file mode 100644
+index 000000000000..871edaa66105
+--- /dev/null
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -0,0 +1,180 @@
++/*
++ * Copyright (C) 2022 Paranoid Android
++ *           (C) 2023 ArrowOS
++ *           (C) 2023 The LibreMobileOS Foundation
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.internal.util;
++
++import android.app.ActivityTaskManager;
++import android.app.Application;
++import android.app.TaskStackListener;
++import android.content.ComponentName;
++import android.content.Context;
++import android.content.res.Resources;
++import android.os.Build;
++import android.os.Binder;
++import android.os.Process;
++import android.text.TextUtils;
++import android.util.Log;
++
++import com.android.internal.R;
++
++import java.lang.reflect.Field;
++import java.util.Arrays;
++
++public class PropImitationHooks {
++
++    private static final String TAG = "PropImitationHooks";
++    private static final boolean DEBUG = false;
++
++    private static final String[] sCertifiedProps =
++            Resources.getSystem().getStringArray(R.array.config_certifiedBuildProperties);
++
++    private static final String sStockFp =
++            Resources.getSystem().getString(R.string.config_stockFingerprint);
++
++    private static final String sNetflixModel =
++            Resources.getSystem().getString(R.string.config_netflixSpoofModel);
++
++    private static final String PACKAGE_ARCORE = "com.google.ar.core";
++    private static final String PACKAGE_FINSKY = "com.android.vending";
++    private static final String PACKAGE_GMS = "com.google.android.gms";
++    private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
++    private static final String PACKAGE_NETFLIX = "com.netflix.mediaclient";
++
++    private static final ComponentName GMS_ADD_ACCOUNT_ACTIVITY = ComponentName.unflattenFromString(
++            "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity");
++
++    private static volatile String sProcessName;
++    private static volatile boolean sIsGms, sIsFinsky, sIsPhotos;
++
++    public static void setProps(Context context) {
++        final String packageName = context.getPackageName();
++        final String processName = Application.getProcessName();
++
++        if (TextUtils.isEmpty(packageName) || TextUtils.isEmpty(processName)) {
++            Log.e(TAG, "Null package or process name");
++            return;
++        }
++
++        sProcessName = processName;
++        sIsGms = packageName.equals(PACKAGE_GMS) && processName.equals(PROCESS_GMS_UNSTABLE);
++        sIsFinsky = packageName.equals(PACKAGE_FINSKY);
++
++        /* Set Certified Properties for GMSCore
++         * Set Stock Fingerprint for ARCore
++         * Set custom model for Netflix
++         */
++        if (sIsGms) {
++            setCertifiedPropsForGms();
++        } else if (!sStockFp.isEmpty() && packageName.equals(PACKAGE_ARCORE)) {
++            dlog("Setting stock fingerprint for: " + packageName);
++            setPropValue("FINGERPRINT", sStockFp);
++        } else if (!sNetflixModel.isEmpty() && packageName.equals(PACKAGE_NETFLIX)) {
++            dlog("Setting model to " + sNetflixModel + " for Netflix");
++            setPropValue("MODEL", sNetflixModel);
++        }
++    }
++
++    private static void setPropValue(String key, Object value) {
++        try {
++            dlog("Setting prop " + key + " to " + value.toString());
++            Field field = Build.class.getDeclaredField(key);
++            field.setAccessible(true);
++            field.set(null, value);
++            field.setAccessible(false);
++        } catch (NoSuchFieldException | IllegalAccessException e) {
++            Log.e(TAG, "Failed to set prop " + key, e);
++        }
++    }
++
++    private static void setCertifiedPropsForGms() {
++        if (sCertifiedProps.length != 4) {
++            Log.e(TAG, "Insufficient array size for certified props: "
++                    + sCertifiedProps.length + ", required 4");
++            return;
++        }
++        final boolean was = isGmsAddAccountActivityOnTop();
++        final TaskStackListener taskStackListener = new TaskStackListener() {
++            @Override
++            public void onTaskStackChanged() {
++                final boolean is = isGmsAddAccountActivityOnTop();
++                if (is ^ was) {
++                    dlog("GmsAddAccountActivityOnTop is:" + is + " was:" + was +
++                            ", killing myself!"); // process will restart automatically later
++                    Process.killProcess(Process.myPid());
++                }
++            }
++        };
++        if (!was) {
++            dlog("Spoofing build for GMS");
++            setPropValue("DEVICE", sCertifiedProps[0]);
++            setPropValue("PRODUCT", sCertifiedProps[1]);
++            setPropValue("MODEL", sCertifiedProps[2]);
++            setPropValue("FINGERPRINT", sCertifiedProps[3]);
++        } else {
++            dlog("Skip spoofing build for GMS, because GmsAddAccountActivityOnTop");
++        }
++        try {
++            ActivityTaskManager.getService().registerTaskStackListener(taskStackListener);
++        } catch (Exception e) {
++            Log.e(TAG, "Failed to register task stack listener!", e);
++        }
++    }
++
++    private static boolean isGmsAddAccountActivityOnTop() {
++        try {
++            final ActivityTaskManager.RootTaskInfo focusedTask =
++                    ActivityTaskManager.getService().getFocusedRootTaskInfo();
++            return focusedTask != null && focusedTask.topActivity != null
++                    && focusedTask.topActivity.equals(GMS_ADD_ACCOUNT_ACTIVITY);
++        } catch (Exception e) {
++            Log.e(TAG, "Unable to get top activity!", e);
++        }
++        return false;
++    }
++
++    public static boolean shouldBypassTaskPermission(Context context) {
++        // GMS doesn't have MANAGE_ACTIVITY_TASKS permission
++        final int callingUid = Binder.getCallingUid();
++        final int gmsUid;
++        try {
++            gmsUid = context.getPackageManager().getApplicationInfo(PACKAGE_GMS, 0).uid;
++            dlog("shouldBypassTaskPermission: gmsUid:" + gmsUid + " callingUid:" + callingUid);
++        } catch (Exception e) {
++            Log.e(TAG, "shouldBypassTaskPermission: unable to get gms uid", e);
++            return false;
++        }
++        return gmsUid == callingUid;
++    }
++
++    private static boolean isCallerSafetyNet() {
++        return sIsGms && Arrays.stream(Thread.currentThread().getStackTrace())
++                .anyMatch(elem -> elem.getClassName().contains("DroidGuard"));
++    }
++
++    public static void onEngineGetCertificateChain() {
++        // Check stack for SafetyNet or Play Integrity
++        if (isCallerSafetyNet() || sIsFinsky) {
++            dlog("Blocked key attestation sIsGms=" + sIsGms + " sIsFinsky=" + sIsFinsky);
++            throw new UnsupportedOperationException();
++        }
++    }
++
++    public static void dlog(String msg) {
++        if (DEBUG) Log.d(TAG, "[" + sProcessName + "] " + msg);
++    }
++}
+diff --git a/core/res/res/values/extra_config.xml b/core/res/res/values/extra_config.xml
+new file mode 100644
+index 000000000000..2d3b52919fde
+--- /dev/null
++++ b/core/res/res/values/extra_config.xml
+@@ -0,0 +1,18 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Build properties from a GMS certified device against current platform SPL level -->
++    <string-array name="config_certifiedBuildProperties" translatable="false">
++      <!--
++        <item>Build.DEVICE</item>
++        <item>Build.PRODUCT</item>
++        <item>Build.MODEL</item>
++        <item>Build.FINGERPRINT</item>
++      -->
++    </string-array>
++
++    <!-- Build fingerprint from stock ROM -->
++    <string name="config_stockFingerprint" translatable="false"></string>
++
++    <!-- Device model (Build.MODEL) to spoof for netflix, if not empty -->
++    <string name="config_netflixSpoofModel" translatable="false"></string>
++</resources>
+diff --git a/core/res/res/values/extra_symbols.xml b/core/res/res/values/extra_symbols.xml
+new file mode 100644
+index 000000000000..eb02ba9f460f
+--- /dev/null
++++ b/core/res/res/values/extra_symbols.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- PropImitationHooks -->
++    <java-symbol type="array" name="config_certifiedBuildProperties" />
++    <java-symbol type="string" name="config_stockFingerprint" />
++    <java-symbol type="string" name="config_netflixSpoofModel" />
++</resources>
+diff --git a/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java b/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java
+index e6a63b9c4c17..81ca30ea8676 100644
+--- a/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java
++++ b/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java
+@@ -48,6 +48,7 @@ import android.system.keystore2.ResponseCode;
+ import android.util.Log;
+ 
+ import com.android.internal.annotations.VisibleForTesting;
++import com.android.internal.util.PropImitationHooks;
+ 
+ import java.io.ByteArrayInputStream;
+ import java.io.IOException;
+@@ -178,6 +179,8 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
+ 
+     @Override
+     public Certificate[] engineGetCertificateChain(String alias) {
++        PropImitationHooks.onEngineGetCertificateChain();
++
+         KeyEntryResponse response = getKeyMetadata(alias);
+ 
+         if (response == null || response.metadata.certificate == null) {
+diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
+index f626ce278f87..32a7941638af 100644
+--- a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
++++ b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
+@@ -262,6 +262,7 @@ import com.android.internal.protolog.ProtoLog;
+ import com.android.internal.util.ArrayUtils;
+ import com.android.internal.util.FastPrintWriter;
+ import com.android.internal.util.FrameworkStatsLog;
++import com.android.internal.util.PropImitationHooks;
+ import com.android.internal.util.function.pooled.PooledLambda;
+ import com.android.server.LocalManagerRegistry;
+ import com.android.server.LocalServices;
+@@ -1988,7 +1989,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+ 
+     @Override
+     public RootTaskInfo getFocusedRootTaskInfo() throws RemoteException {
+-        enforceTaskPermission("getFocusedRootTaskInfo()");
++        if (!PropImitationHooks.shouldBypassTaskPermission(mContext)) {
++            enforceTaskPermission("getFocusedRootTaskInfo()");
++        }
+         final long ident = Binder.clearCallingIdentity();
+         try {
+             synchronized (mGlobalLock) {
+@@ -3110,7 +3113,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+     /** Sets the task stack listener that gets callbacks when a task stack changes. */
+     @Override
+     public void registerTaskStackListener(ITaskStackListener listener) {
+-        enforceTaskPermission("registerTaskStackListener()");
++        if (!PropImitationHooks.shouldBypassTaskPermission(mContext)) {
++            enforceTaskPermission("registerTaskStackListener()");
++        }
+         mTaskChangeNotificationController.registerTaskStackListener(listener);
+     }
+ 
+-- 
+2.47.1
+

@@ -1,0 +1,109 @@
+From 6c1e319511cf051f092a9557d9c8a62ca275c0bb Mon Sep 17 00:00:00 2001
+From: COSMIC <rayavanindra@gmail.com>
+Date: Fri, 13 Dec 2024 13:38:26 +0530
+Subject: [PATCH 09/19] services: Adapt face sense to A15-QPR1
+
+---
+ .../sensors/face/sense/BiometricTestSessionImpl.java       | 7 +++++++
+ .../sensors/face/sense/FaceGetFeatureClient.java           | 2 +-
+ .../sensors/face/sense/FaceInternalCleanupClient.java      | 6 ++++++
+ .../sensors/face/sense/FaceResetLockoutClient.java         | 3 ++-
+ .../sensors/face/sense/FaceSetFeatureClient.java           | 2 +-
+ .../sensors/face/sense/FaceUpdateActiveUserClient.java     | 3 ++-
+ 6 files changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/BiometricTestSessionImpl.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/BiometricTestSessionImpl.java
+index 0ab778ec3095..90dc55a7ed50 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/sense/BiometricTestSessionImpl.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/BiometricTestSessionImpl.java
+@@ -224,4 +224,11 @@ public class BiometricTestSessionImpl extends ITestSession.Stub {
+             }
+         });
+     }
++
++    @android.annotation.EnforcePermission(android.Manifest.permission.TEST_BIOMETRIC)
++    @Override
++    public int getSensorId() {
++        super.getSensorId_enforcePermission();
++        return mSensorId;
++    }
+ }
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceGetFeatureClient.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceGetFeatureClient.java
+index fc3b8223a967..73f99f168d1d 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceGetFeatureClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceGetFeatureClient.java
+@@ -49,7 +49,7 @@ public class FaceGetFeatureClient extends HalClientMonitor<ISenseService> {
+             @NonNull BiometricLogger logger, @NonNull BiometricContext biometricContext,
+             int feature, int faceId) {
+         super(context, lazyDaemon, token, listener, userId, owner, 0 /* cookie */, sensorId,
+-                logger, biometricContext);
++                logger, biometricContext, false /* isMandatoryBiometrics */);
+         mFeature = feature;
+         mFaceId = faceId;
+     }
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceInternalCleanupClient.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceInternalCleanupClient.java
+index bd696fd60a8d..c2b21f55a64b 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceInternalCleanupClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceInternalCleanupClient.java
+@@ -19,6 +19,7 @@ package com.android.server.biometrics.sensors.face.sense;
+ 
+ import android.annotation.NonNull;
+ import android.content.Context;
++import android.hardware.biometrics.BiometricsProtoEnums;
+ import android.hardware.face.Face;
+ import android.os.IBinder;
+ 
+@@ -67,4 +68,9 @@ class FaceInternalCleanupClient extends InternalCleanupClient<Face, ISenseServic
+                 null /* ClientMonitorCallbackConverter */, biometricId, userId, owner, utils,
+                 sensorId, logger, biometricContext, authenticatorIds);
+     }
++
++    @Override
++    protected int getModality() {
++        return BiometricsProtoEnums.MODALITY_FACE;
++    }
+ }
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceResetLockoutClient.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceResetLockoutClient.java
+index ab791d0be4df..1a9a91b972c2 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceResetLockoutClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceResetLockoutClient.java
+@@ -44,7 +44,8 @@ public class FaceResetLockoutClient extends HalClientMonitor<ISenseService> {
+             @NonNull BiometricLogger logger, @NonNull BiometricContext biometricContext,
+             @NonNull byte[] hardwareAuthToken) {
+         super(context, lazyDaemon, null /* token */, null /* listener */, userId, owner,
+-                0 /* cookie */, sensorId, logger, biometricContext);
++                0 /* cookie */, sensorId, logger, biometricContext,
++                false /* isMandatoryBiometrics */);
+ 
+         mHardwareAuthToken = (byte[]) hardwareAuthToken.clone();
+     }
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceSetFeatureClient.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceSetFeatureClient.java
+index 65f17d5abf73..0b8d3ffff6a7 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceSetFeatureClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceSetFeatureClient.java
+@@ -50,7 +50,7 @@ public class FaceSetFeatureClient extends HalClientMonitor<ISenseService> {
+             @NonNull BiometricLogger logger, @NonNull BiometricContext biometricContext,
+             int feature, boolean enabled, byte[] hardwareAuthToken, int faceId) {
+         super(context, lazyDaemon, token, listener, userId, owner, 0 /* cookie */, sensorId,
+-                logger, biometricContext);
++                logger, biometricContext, false /* isMandatoryBiometrics */);
+         mFeature = feature;
+         mEnabled = enabled;
+         mFaceId = faceId;
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceUpdateActiveUserClient.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceUpdateActiveUserClient.java
+index 08c075067082..78e291e2e66e 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceUpdateActiveUserClient.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/FaceUpdateActiveUserClient.java
+@@ -48,7 +48,8 @@ public class FaceUpdateActiveUserClient extends HalClientMonitor<ISenseService>
+             @NonNull BiometricContext biometricContext, boolean hasEnrolledBiometrics,
+             @NonNull Map<Integer, Long> authenticatorIds) {
+         super(context, lazyDaemon, null /* token */, null /* listener */, userId, owner,
+-                0 /* cookie */, sensorId, logger, biometricContext);
++                0 /* cookie */, sensorId, logger, biometricContext,
++                false /* isMandatoryBiometrics */);
+         mHasEnrolledBiometrics = hasEnrolledBiometrics;
+         mAuthenticatorIds = authenticatorIds;
+     }
+-- 
+2.47.1
+

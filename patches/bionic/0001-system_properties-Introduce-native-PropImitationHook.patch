@@ -1,0 +1,130 @@
+From 08ba189da6195d1e6fb9729a4c47dc8b25074eca Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Fri, 8 Dec 2023 05:53:08 +0530
+Subject: [PATCH] system_properties: Introduce native PropImitationHooks
+
+Allows spoofing first API and security patch level in order to pass
+SafetyNet CTS/Play Integrity on build fingerprints newer than 2018.
+
+Inspired by https://github.com/chiteroman/PlayIntegrityFix
+
+Change-Id: If4dd24abe84edcf5e98d27fb5f78ee99f266b4bd
+---
+ libc/system_properties/Android.bp             |  1 +
+ .../system_properties/prop_imitation_hooks.h  | 20 +++++++++++
+ .../prop_imitation_hooks.cpp                  | 33 +++++++++++++++++++
+ libc/system_properties/system_properties.cpp  |  5 +++
+ 4 files changed, 59 insertions(+)
+ create mode 100644 libc/system_properties/include/system_properties/prop_imitation_hooks.h
+ create mode 100644 libc/system_properties/prop_imitation_hooks.cpp
+
+diff --git a/libc/system_properties/Android.bp b/libc/system_properties/Android.bp
+index e2fce34b9..25c39a23c 100644
+--- a/libc/system_properties/Android.bp
++++ b/libc/system_properties/Android.bp
+@@ -21,6 +21,7 @@ cc_library_static {
+         "contexts_split.cpp",
+         "contexts_serialized.cpp",
+         "prop_area.cpp",
++        "prop_imitation_hooks.cpp",
+         "prop_info.cpp",
+         "system_properties.cpp",
+     ],
+diff --git a/libc/system_properties/include/system_properties/prop_imitation_hooks.h b/libc/system_properties/include/system_properties/prop_imitation_hooks.h
+new file mode 100644
+index 000000000..5d35ea046
+--- /dev/null
++++ b/libc/system_properties/include/system_properties/prop_imitation_hooks.h
+@@ -0,0 +1,20 @@
++/*
++ * Copyright (C) 2023 Paranoid Android
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#pragma once
++
++#include <async_safe/log.h>
++
++#define DEBUG false
++#define LOG_TAG "PropImitationHooks/Native"
++#define PIH_LOG(fmt, ...) if (DEBUG) \
++  async_safe_format_log(ANDROID_LOG_INFO, LOG_TAG, "%s: " fmt, __func__, ##__VA_ARGS__)
++
++class PropImitationHooks {
++ public:
++  PropImitationHooks() = default;
++  void OnFind(const char** name);
++};
+diff --git a/libc/system_properties/prop_imitation_hooks.cpp b/libc/system_properties/prop_imitation_hooks.cpp
+new file mode 100644
+index 000000000..99b145e4b
+--- /dev/null
++++ b/libc/system_properties/prop_imitation_hooks.cpp
+@@ -0,0 +1,33 @@
++/*
++ * Copyright (C) 2023 Paranoid Android
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#include <stdlib.h>
++#include <string.h>
++
++#include "system_properties/prop_imitation_hooks.h"
++
++#define GMS_UNSTABLE "com.google.android.gms.unstable"
++
++#define PROP_SECURITY_PATCH "ro.build.version.security_patch"
++#define PROP_PIH_SECURITY_PATCH "persist.sys.pihooks.security_patch"
++
++#define PROP_FIRST_API_LEVEL "ro.product.first_api_level"
++#define PROP_PIH_FIRST_API_LEVEL "persist.sys.pihooks.first_api_level"
++
++void PropImitationHooks::OnFind(const char** name) {
++  if (getprogname() == nullptr || strcmp(getprogname(), GMS_UNSTABLE) != 0) {
++    return;
++  }
++  PIH_LOG("name is %s", *name);
++  if (strcmp(*name, PROP_SECURITY_PATCH) == 0) {
++    *name = PROP_PIH_SECURITY_PATCH;
++  } else if (strcmp(*name, PROP_FIRST_API_LEVEL) == 0) {
++    *name = PROP_PIH_FIRST_API_LEVEL;
++  } else {
++    return;
++  }
++  PIH_LOG("name changed to %s", *name);
++}
+diff --git a/libc/system_properties/system_properties.cpp b/libc/system_properties/system_properties.cpp
+index e0d38a822..d9167709f 100644
+--- a/libc/system_properties/system_properties.cpp
++++ b/libc/system_properties/system_properties.cpp
+@@ -48,6 +48,7 @@
+ #include "system_properties/context_node.h"
+ #include "system_properties/prop_area.h"
+ #include "system_properties/prop_info.h"
++#include "system_properties/prop_imitation_hooks.h"
+ 
+ #define SERIAL_DIRTY(serial) ((serial)&1)
+ #define SERIAL_VALUE_LEN(serial) ((serial) >> 24)
+@@ -61,6 +62,8 @@ static bool is_dir(const char* pathname) {
+   return S_ISDIR(info.st_mode);
+ }
+ 
++static PropImitationHooks pi_hooks;
++
+ bool SystemProperties::Init(const char* filename) {
+   // This is called from __libc_init_common, and should leave errno at 0 (http://b/37248982).
+   ErrnoRestorer errno_restorer;
+@@ -164,6 +167,8 @@ const prop_info* SystemProperties::Find(const char* name) {
+     return nullptr;
+   }
+ 
++  pi_hooks.OnFind(&name);
++
+   prop_area* pa = contexts_->GetPropAreaForName(name);
+   if (!pa) {
+     async_safe_format_log(ANDROID_LOG_WARN, "libc", "Access denied finding property \"%s\"", name);
+-- 
+2.47.1
+

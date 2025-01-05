@@ -1,0 +1,70 @@
+From 5cca21623596a624bd624d6cd2c1574c65ae67b2 Mon Sep 17 00:00:00 2001
+From: Pranav Vashi <neobuddy89@gmail.com>
+Date: Mon, 14 Oct 2024 17:04:40 +0530
+Subject: [PATCH 11/19] services: Force load FaceSense providers
+
+* Current AOSP implementation checks if HIDL/AIDL configs available and
+  skips registering providers if configs not available.
+* Fix NPE case in BiometricScheduler by replicating old path.
+
+Change-Id: Ifcaf17d6a8b00a7de319d4b3000fec835194f7ff
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+---
+ .../core/java/com/android/server/biometrics/AuthService.java  | 4 +++-
+ .../android/server/biometrics/sensors/BiometricScheduler.java | 4 ++++
+ .../android/server/biometrics/sensors/face/FaceService.java   | 2 +-
+ 3 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/services/core/java/com/android/server/biometrics/AuthService.java b/services/core/java/com/android/server/biometrics/AuthService.java
+index 2d802b21cf03..951054fca715 100644
+--- a/services/core/java/com/android/server/biometrics/AuthService.java
++++ b/services/core/java/com/android/server/biometrics/AuthService.java
+@@ -73,6 +73,7 @@ import com.android.internal.annotations.VisibleForTesting;
+ import com.android.internal.util.ArrayUtils;
+ import com.android.server.SystemService;
+ import com.android.server.biometrics.sensors.face.FaceService;
++import com.android.server.biometrics.sensors.face.sense.SenseUtils;
+ import com.android.server.biometrics.sensors.fingerprint.FingerprintService;
+ import com.android.server.companion.virtual.VirtualDeviceManagerInternal;
+ 
+@@ -845,7 +846,8 @@ public class AuthService extends SystemService {
+             final String[] hidlConfigStrings, final Context context,
+             final IFaceService faceService, final BiometricHandlerProvider handlerProvider) {
+         if ((hidlConfigStrings == null || hidlConfigStrings.length == 0)
+-                && (faceAidlInstances == null || faceAidlInstances.length == 0)) {
++                && (faceAidlInstances == null || faceAidlInstances.length == 0)
++                && !SenseUtils.canUseProvider()) {
+             Slog.d(TAG, "No face sensors.");
+             return;
+         }
+diff --git a/services/core/java/com/android/server/biometrics/sensors/BiometricScheduler.java b/services/core/java/com/android/server/biometrics/sensors/BiometricScheduler.java
+index 82d5d4d8141d..8c66768f2878 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/BiometricScheduler.java
++++ b/services/core/java/com/android/server/biometrics/sensors/BiometricScheduler.java
+@@ -311,6 +311,10 @@ public class BiometricScheduler<T, U> {
+             Slog.d(TAG, "No operations, returning to idle");
+             return;
+         }
++        if (mCurrentUserRetriever == null) {
++            startNextOperationIfIdle();
++            return;
++        }
+ 
+         final int currentUserId = mCurrentUserRetriever.get();
+         final int nextUserId = mPendingOperations.getFirst().getTargetUserId();
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
+index 1a9be1e6a953..3853d4197983 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
+@@ -689,7 +689,7 @@ public class FaceService extends SystemService {
+                 FaceSensorConfigurations faceSensorConfigurations) {
+             super.registerAuthenticators_enforcePermission();
+ 
+-            if (!faceSensorConfigurations.hasSensorConfigurations()) {
++            if (!faceSensorConfigurations.hasSensorConfigurations() && !SenseUtils.canUseProvider()) {
+                 Slog.d(TAG, "No face sensors to register.");
+                 return;
+             }
+-- 
+2.47.1
+

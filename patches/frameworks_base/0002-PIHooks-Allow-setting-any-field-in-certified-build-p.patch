@@ -1,0 +1,115 @@
+From e3e792948cd8d8398c522ebd6798bc3a281dd332 Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Sat, 18 Nov 2023 20:08:08 +0530
+Subject: [PATCH 02/19] PIHooks: Allow setting any field in certified build
+ props
+
+Brand and manufacturer may also be used for attestation checks, as seen
+by _FOR_ATTESTATION fields added in Android 14 [1]. Refactor certified
+properties to allow setting any Build or Build.VERSION string or integer
+field, to make it more scalable for future.
+
+[1]: https://cs.android.com/android/_/android/platform/frameworks/base/+/fb32aac1ea60bf267ff013f6e1023641736c6de5
+
+Change-Id: I16dc8e18a67ffd8fdba8eb9c6928447f82b7d810
+---
+ .../internal/util/PropImitationHooks.java     | 36 +++++++++++++------
+ core/res/res/values/extra_config.xml          | 12 ++++---
+ 2 files changed, 33 insertions(+), 15 deletions(-)
+
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index 871edaa66105..0d8b493da740 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -89,22 +89,27 @@ public class PropImitationHooks {
+         }
+     }
+ 
+-    private static void setPropValue(String key, Object value) {
++    private static void setPropValue(String key, String value) {
+         try {
+             dlog("Setting prop " + key + " to " + value.toString());
+-            Field field = Build.class.getDeclaredField(key);
++            Class clazz = Build.class;
++            if (key.startsWith("VERSION.")) {
++                clazz = Build.VERSION.class;
++                key = key.substring(8);
++            }
++            Field field = clazz.getDeclaredField(key);
+             field.setAccessible(true);
+-            field.set(null, value);
++            // Cast the value to int if it's an integer field, otherwise string.
++            field.set(null, field.getType().equals(Integer.TYPE) ? Integer.parseInt(value) : value);
+             field.setAccessible(false);
+-        } catch (NoSuchFieldException | IllegalAccessException e) {
++        } catch (Exception e) {
+             Log.e(TAG, "Failed to set prop " + key, e);
+         }
+     }
+ 
+     private static void setCertifiedPropsForGms() {
+-        if (sCertifiedProps.length != 4) {
+-            Log.e(TAG, "Insufficient array size for certified props: "
+-                    + sCertifiedProps.length + ", required 4");
++        if (sCertifiedProps.length == 0) {
++            dlog("Certified props are not set");
+             return;
+         }
+         final boolean was = isGmsAddAccountActivityOnTop();
+@@ -121,10 +126,7 @@ public class PropImitationHooks {
+         };
+         if (!was) {
+             dlog("Spoofing build for GMS");
+-            setPropValue("DEVICE", sCertifiedProps[0]);
+-            setPropValue("PRODUCT", sCertifiedProps[1]);
+-            setPropValue("MODEL", sCertifiedProps[2]);
+-            setPropValue("FINGERPRINT", sCertifiedProps[3]);
++            setCertifiedProps();
+         } else {
+             dlog("Skip spoofing build for GMS, because GmsAddAccountActivityOnTop");
+         }
+@@ -135,6 +137,18 @@ public class PropImitationHooks {
+         }
+     }
+ 
++    private static void setCertifiedProps() {
++        for (String entry : sCertifiedProps) {
++            // Each entry must be of the format FIELD:value
++            final String[] fieldAndProp = entry.split(":", 2);
++            if (fieldAndProp.length != 2) {
++                Log.e(TAG, "Invalid entry in certified props: " + entry);
++                continue;
++            }
++            setPropValue(fieldAndProp[0], fieldAndProp[1]);
++        }
++    }
++
+     private static boolean isGmsAddAccountActivityOnTop() {
+         try {
+             final ActivityTaskManager.RootTaskInfo focusedTask =
+diff --git a/core/res/res/values/extra_config.xml b/core/res/res/values/extra_config.xml
+index 2d3b52919fde..a7038f072ff2 100644
+--- a/core/res/res/values/extra_config.xml
++++ b/core/res/res/values/extra_config.xml
+@@ -3,10 +3,14 @@
+     <!-- Build properties from a GMS certified device against current platform SPL level -->
+     <string-array name="config_certifiedBuildProperties" translatable="false">
+       <!--
+-        <item>Build.DEVICE</item>
+-        <item>Build.PRODUCT</item>
+-        <item>Build.MODEL</item>
+-        <item>Build.FINGERPRINT</item>
++        Each entry must be of the format
++            FIELD:value
++        with the field belonging to android.os.Build or android.os.Build.VERSION class.
++        Example:
++        <item>BRAND:foo</item>
++        <item>DEVICE:bar</item>
++        <item>FINGERPRINT:foo/bar/bar:1.0/lorem/ipsum:dolor/sit-amet</item>
++        <item>VERSION.RELEASE:1.0</item>
+       -->
+     </string-array>
+ 
+-- 
+2.47.1
+

@@ -1,0 +1,370 @@
+From 61d55b59b4ec110f9e067d040a2a173f02c2ac5e Mon Sep 17 00:00:00 2001
+From: minaripenguin <minaripenguin@users.noreply.github.com>
+Date: Thu, 30 Nov 2023 10:39:01 +0800
+Subject: [PATCH 13/19] SystemUI: Implement face unlock recognition animation
+ and text
+
+Co-authored-by: jhenrique09 <jhsv09@gmail.com>
+Change-Id: I18f7ab0bc462b90cc9f0ec623fef840fa7dbb8a2
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+Signed-off-by: Dmitrii <bankersenator@gmail.com>
+---
+ .../res/drawable/face_not_verified.xml        |  16 +++
+ .../SystemUI/res/drawable/face_scanning.xml   |  10 ++
+ .../SystemUI/res/drawable/face_success.xml    |  16 +++
+ .../res/layout/keyguard_bottom_area.xml       |  11 ++
+ .../SystemUI/res/values/extra_strings.xml     |   5 +
+ .../KeyguardIndicationController.java         |  60 ++++++++++-
+ .../statusbar/phone/FaceUnlockImageView.kt    | 102 ++++++++++++++++++
+ 7 files changed, 218 insertions(+), 2 deletions(-)
+ create mode 100644 packages/SystemUI/res/drawable/face_not_verified.xml
+ create mode 100644 packages/SystemUI/res/drawable/face_scanning.xml
+ create mode 100644 packages/SystemUI/res/drawable/face_success.xml
+ create mode 100644 packages/SystemUI/res/values/extra_strings.xml
+ create mode 100644 packages/SystemUI/src/com/android/systemui/statusbar/phone/FaceUnlockImageView.kt
+
+diff --git a/packages/SystemUI/res/drawable/face_not_verified.xml b/packages/SystemUI/res/drawable/face_not_verified.xml
+new file mode 100644
+index 000000000000..03b0566d6f04
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/face_not_verified.xml
+@@ -0,0 +1,16 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="?attr/colorControlNormal">
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M15.5,9.5m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0"/>
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M8.5,9.5m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0"/>
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M12,14c-2.33,0 -4.32,1.45 -5.12,3.5h1.67c0.69,-1.19 1.97,-2 3.45,-2s2.75,0.81 3.45,2h1.67c-0.8,-2.05 -2.79,-3.5 -5.12,-3.5zM11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2zM12,20c-4.42,0 -8,-3.58 -8,-8s3.58,-8 8,-8 8,3.58 8,8 -3.58,8 -8,8z"/>
++</vector>
+diff --git a/packages/SystemUI/res/drawable/face_scanning.xml b/packages/SystemUI/res/drawable/face_scanning.xml
+new file mode 100644
+index 000000000000..27de6c80ef20
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/face_scanning.xml
+@@ -0,0 +1,10 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="?attr/colorControlNormal">
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M10.25,13c0,0.69 -0.56,1.25 -1.25,1.25S7.75,13.69 7.75,13s0.56,-1.25 1.25,-1.25 1.25,0.56 1.25,1.25zM15,11.75c-0.69,0 -1.25,0.56 -1.25,1.25s0.56,1.25 1.25,1.25 1.25,-0.56 1.25,-1.25 -0.56,-1.25 -1.25,-1.25zM22,12c0,5.52 -4.48,10 -10,10S2,17.52 2,12 6.48,2 12,2s10,4.48 10,10zM10.66,4.12C12.06,6.44 14.6,8 17.5,8c0.46,0 0.91,-0.05 1.34,-0.12C17.44,5.56 14.9,4 12,4c-0.46,0 -0.91,0.05 -1.34,0.12zM4.42,9.47c1.71,-0.97 3.03,-2.55 3.66,-4.44C6.37,6 5.05,7.58 4.42,9.47zM20,12c0,-0.78 -0.12,-1.53 -0.33,-2.24 -0.7,0.15 -1.42,0.24 -2.17,0.24 -3.13,0 -5.92,-1.44 -7.76,-3.69C8.69,8.87 6.6,10.88 4,11.86c0.01,0.04 0,0.09 0,0.14 0,4.41 3.59,8 8,8s8,-3.59 8,-8z"/>
++</vector>
+diff --git a/packages/SystemUI/res/drawable/face_success.xml b/packages/SystemUI/res/drawable/face_success.xml
+new file mode 100644
+index 000000000000..d63dacb1512e
+--- /dev/null
++++ b/packages/SystemUI/res/drawable/face_success.xml
+@@ -0,0 +1,16 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24"
++    android:tint="?attr/colorControlNormal">
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M15.5,9.5m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0"/>
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M8.5,9.5m-1.5,0a1.5,1.5 0,1 1,3 0a1.5,1.5 0,1 1,-3 0"/>
++  <path
++      android:fillColor="@android:color/white"
++      android:pathData="M12,16c-1.48,0 -2.75,-0.81 -3.45,-2L6.88,14c0.8,2.05 2.79,3.5 5.12,3.5s4.32,-1.45 5.12,-3.5h-1.67c-0.69,1.19 -1.97,2 -3.45,2zM11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2zM12,20c-4.42,0 -8,-3.58 -8,-8s3.58,-8 8,-8 8,3.58 8,8 -3.58,8 -8,8z"/>
++</vector>
+diff --git a/packages/SystemUI/res/layout/keyguard_bottom_area.xml b/packages/SystemUI/res/layout/keyguard_bottom_area.xml
+index e602d6c8848d..26d7f803fb1d 100644
+--- a/packages/SystemUI/res/layout/keyguard_bottom_area.xml
++++ b/packages/SystemUI/res/layout/keyguard_bottom_area.xml
+@@ -30,6 +30,17 @@
+         android:layout_gravity="bottom|center_horizontal"
+         android:orientation="vertical">
+ 
++        <com.android.systemui.statusbar.phone.FaceUnlockImageView
++            android:id="@+id/face_unlock_icon"
++            android:layout_height="@dimen/keyguard_affordance_fixed_height"
++            android:layout_width="@dimen/keyguard_affordance_fixed_width"
++            android:layout_marginBottom="@dimen/keyguard_affordance_vertical_offset"
++            android:padding="@dimen/keyguard_affordance_fixed_padding"
++            android:layout_gravity="center"
++            android:scaleType="fitCenter"
++            android:tint="#FFFFFF"
++            android:visibility="gone" />
++
+         <com.android.systemui.statusbar.phone.KeyguardIndicationTextView
+             android:id="@id/keyguard_indication_text"
+             android:layout_width="match_parent"
+diff --git a/packages/SystemUI/res/values/extra_strings.xml b/packages/SystemUI/res/values/extra_strings.xml
+new file mode 100644
+index 000000000000..775a83dd35a2
+--- /dev/null
++++ b/packages/SystemUI/res/values/extra_strings.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <!-- Text while recognizing face -->
++    <string name="face_unlock_recognizing">Recognizing face...</string>
++</resources>
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java b/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
+index 47812adaea00..f02df85fe5f7 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
+@@ -113,6 +113,7 @@ import com.android.systemui.plugins.FalsingManager;
+ import com.android.systemui.plugins.statusbar.StatusBarStateController;
+ import com.android.systemui.res.R;
+ import com.android.systemui.settings.UserTracker;
++import com.android.systemui.statusbar.phone.FaceUnlockImageView;
+ import com.android.systemui.statusbar.phone.KeyguardBypassController;
+ import com.android.systemui.statusbar.phone.KeyguardIndicationTextView;
+ import com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager;
+@@ -149,6 +150,8 @@ public class KeyguardIndicationController {
+ 
+     private static final int MSG_SHOW_ACTION_TO_UNLOCK = 1;
+     private static final int MSG_RESET_ERROR_MESSAGE_ON_SCREEN_ON = 2;
++    private static final int MSG_SHOW_RECOGNIZING_FACE = 3;
++    private static final int MSG_HIDE_RECOGNIZING_FACE = 4;
+     private static final long TRANSIENT_BIOMETRIC_ERROR_TIMEOUT = 1300;
+     public static final long DEFAULT_MESSAGE_TIME = 3500;
+     public static final long DEFAULT_HIDE_DELAY_MS =
+@@ -164,6 +167,7 @@ public class KeyguardIndicationController {
+     private final UserTracker mUserTracker;
+     private final BouncerMessageInteractor mBouncerMessageInteractor;
+     private ViewGroup mIndicationArea;
++    private FaceUnlockImageView mFaceIconView;
+     private KeyguardIndicationTextView mTopIndicationView;
+     private KeyguardIndicationTextView mLockScreenIndicationView;
+     private final IBatteryStats mBatteryInfo;
+@@ -223,6 +227,8 @@ public class KeyguardIndicationController {
+     private final FaceHelpMessageDeferral mFaceAcquiredMessageDeferral;
+     private boolean mInited;
+ 
++    private boolean mFaceDetectionRunning;
++
+     private KeyguardUpdateMonitorCallback mUpdateMonitorCallback;
+ 
+     private boolean mDozing;
+@@ -265,6 +271,15 @@ public class KeyguardIndicationController {
+                 mBiometricErrorMessageToShowOnScreenOn = null;
+             }
+         }
++
++        @Override
++        public void onScreenTurnedOff() {
++            if (mFaceDetectionRunning) {
++                mFaceDetectionRunning = false;
++                mBiometricErrorMessageToShowOnScreenOn = null;
++                hideFaceUnlockRecognizingMessage();
++            }
++        }
+     };
+     private boolean mFaceLockedOutThisAuthSession;
+ 
+@@ -352,6 +367,11 @@ public class KeyguardIndicationController {
+                     showActionToUnlock();
+                 } else if (msg.what == MSG_RESET_ERROR_MESSAGE_ON_SCREEN_ON) {
+                     mBiometricErrorMessageToShowOnScreenOn = null;
++                } else if (msg.what == MSG_SHOW_RECOGNIZING_FACE) {
++                    mBiometricErrorMessageToShowOnScreenOn = null;
++                    showFaceUnlockRecognizingMessage();
++                } else if (msg.what == MSG_HIDE_RECOGNIZING_FACE) {
++                    hideFaceUnlockRecognizingMessage();
+                 }
+             }
+         };
+@@ -393,6 +413,7 @@ public class KeyguardIndicationController {
+ 
+     public void setIndicationArea(ViewGroup indicationArea) {
+         mIndicationArea = indicationArea;
++        mFaceIconView = indicationArea.findViewById(R.id.face_unlock_icon);
+         mTopIndicationView = indicationArea.findViewById(R.id.keyguard_indication_text);
+         mLockScreenIndicationView = indicationArea.findViewById(
+                 R.id.keyguard_indication_text_bottom);
+@@ -977,6 +998,12 @@ public class KeyguardIndicationController {
+             );
+             return;
+         }
++        
++        if (TextUtils.equals(biometricMessage, mContext.getString(R.string.keyguard_face_successful_unlock))) {
++            mFaceIconView.setState(FaceUnlockImageView.State.SUCCESS);
++        } else if (TextUtils.equals(biometricMessage, mContext.getString(R.string.keyguard_face_failed))) {
++            mFaceIconView.setState(FaceUnlockImageView.State.NOT_VERIFIED);
++        }
+ 
+         if (mBiometricMessageSource != null && biometricSourceType == null) {
+             // If there's a current biometric message showing and a non-biometric message
+@@ -1010,6 +1037,25 @@ public class KeyguardIndicationController {
+         }
+     }
+ 
++    private void showFaceUnlockRecognizingMessage() {
++        mFaceIconView.setVisibility(View.VISIBLE);
++        mFaceIconView.setState(FaceUnlockImageView.State.SCANNING);
++        showBiometricMessage(mContext.getResources().getString(
++                                    R.string.face_unlock_recognizing), FACE);
++    }
++
++    private void hideFaceUnlockRecognizingMessage() {
++        if (mFaceIconView != null) {
++            mFaceIconView.setVisibility(View.GONE);
++        }
++        String faceUnlockMessage = mContext.getResources().getString(
++            R.string.face_unlock_recognizing);
++        if (mBiometricMessage != null && mBiometricMessage == faceUnlockMessage) {
++            mBiometricMessage = null;
++            hideBiometricMessage();
++        }
++    }
++
+     /**
+      * Hides transient indication.
+      */
+@@ -1499,8 +1545,17 @@ public class KeyguardIndicationController {
+         @Override
+         public void onBiometricRunningStateChanged(boolean running,
+                 BiometricSourceType biometricSourceType) {
+-            if (!running && biometricSourceType == FACE) {
+-                showTrustAgentErrorMessage(mTrustAgentErrorMessage);
++            if (biometricSourceType == BiometricSourceType.FACE) {
++                mFaceDetectionRunning = running;
++                if (running) {
++                    mHandler.removeMessages(MSG_HIDE_RECOGNIZING_FACE);
++                    mHandler.removeMessages(MSG_SHOW_RECOGNIZING_FACE);
++                    mHandler.sendEmptyMessageDelayed(MSG_SHOW_RECOGNIZING_FACE, 100);
++                } else {
++                    mHandler.removeMessages(MSG_SHOW_RECOGNIZING_FACE);
++                    mHandler.removeMessages(MSG_HIDE_RECOGNIZING_FACE);
++                    mHandler.sendEmptyMessageDelayed(MSG_HIDE_RECOGNIZING_FACE, 100);
++                }
+             }
+         }
+ 
+@@ -1685,6 +1740,7 @@ public class KeyguardIndicationController {
+ 
+             if (mDozing) {
+                 hideBiometricMessage();
++                hideFaceUnlockRecognizingMessage();
+             }
+             updateDeviceEntryIndication(false);
+         }
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/FaceUnlockImageView.kt b/packages/SystemUI/src/com/android/systemui/statusbar/phone/FaceUnlockImageView.kt
+new file mode 100644
+index 000000000000..5b6c7beff8dc
+--- /dev/null
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/FaceUnlockImageView.kt
+@@ -0,0 +1,102 @@
++/*
++ * Copyright (C) 2023 the risingOS Android Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.android.systemui.statusbar.phone
++
++import android.animation.ObjectAnimator
++import android.animation.AnimatorSet
++import android.animation.PropertyValuesHolder
++import android.content.Context
++import android.util.AttributeSet
++import android.widget.ImageView
++import android.view.animation.LinearInterpolator
++import android.view.animation.AccelerateDecelerateInterpolator
++import android.view.animation.DecelerateInterpolator
++
++import com.android.systemui.R
++
++class FaceUnlockImageView @JvmOverloads constructor(
++    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
++) : ImageView(context, attrs, defStyleAttr) {
++
++    enum class State {
++        SCANNING, NOT_VERIFIED, SUCCESS
++    }
++
++    private var currentState: State = State.SCANNING
++    private val scanningAnimation: ObjectAnimator = createScanningAnimation()
++    private val successShakeAnimation: AnimatorSet = createShakeAnimation(5f)
++    private val failureShakeAnimation: AnimatorSet = createShakeAnimation(10f)
++
++    init {
++        updateDrawable(animate = false)
++    }
++
++    fun setState(state: State) {
++        if (currentState != state) {
++            currentState = state
++            updateDrawable(animate = true)
++            handleAnimationForState(state)
++        }
++    }
++
++    private fun updateDrawable(animate: Boolean) {
++        setImageResource(when (currentState) {
++            State.SCANNING -> R.drawable.face_scanning
++            State.NOT_VERIFIED -> R.drawable.face_not_verified
++            State.SUCCESS -> R.drawable.face_success
++        })
++    }
++
++    private fun createScanningAnimation(): ObjectAnimator {
++        val scaleX = PropertyValuesHolder.ofFloat("scaleX", 1f, 1.2f, 1f)
++        val scaleY = PropertyValuesHolder.ofFloat("scaleY", 1f, 1.2f, 1f)
++        val scanningAnimator = ObjectAnimator.ofPropertyValuesHolder(this, scaleX, scaleY)
++        scanningAnimator.duration = 1000
++        scanningAnimator.repeatCount = ObjectAnimator.INFINITE
++        scanningAnimator.interpolator = LinearInterpolator()
++        return scanningAnimator
++    }
++
++    private fun createShakeAnimation(amplitude: Float): AnimatorSet {
++        val animatorSet = AnimatorSet()
++        val translationX = PropertyValuesHolder.ofFloat("translationX", 0f, amplitude, -amplitude, amplitude, -amplitude, 0f)
++        val shakeAnimator = ObjectAnimator.ofPropertyValuesHolder(this, translationX)
++        shakeAnimator.duration = 500
++        shakeAnimator.interpolator = AccelerateDecelerateInterpolator()
++        animatorSet.play(shakeAnimator)
++        return animatorSet
++    }
++
++    private fun handleAnimationForState(state: State) {
++        when (state) {
++            State.SCANNING -> {
++                failureShakeAnimation.cancel()
++                successShakeAnimation.cancel()
++                scanningAnimation.start()
++            }
++            State.NOT_VERIFIED -> {
++                scanningAnimation.cancel()
++                successShakeAnimation.cancel()
++                failureShakeAnimation.start()
++            }
++            State.SUCCESS -> {
++                scanningAnimation.cancel()
++                failureShakeAnimation.cancel()
++                successShakeAnimation.start()
++            }
++        }
++    }
++}
+-- 
+2.47.1
+

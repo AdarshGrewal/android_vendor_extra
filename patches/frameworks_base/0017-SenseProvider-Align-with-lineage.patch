@@ -1,0 +1,26 @@
+From 304b55b6313433eab77c87769ddd2130fb2f2eb1 Mon Sep 17 00:00:00 2001
+From: AdarshGrewal <adarshgrewal@gmail.com>
+Date: Wed, 20 Nov 2024 11:41:06 +0530
+Subject: [PATCH 17/19] SenseProvider: Align with lineage
+
+Change-Id: Ie6e601e4c737db3f2c4a64742095abfea727160c
+---
+ .../server/biometrics/sensors/face/sense/SenseProvider.java     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java
+index c0a7aae053da..6573b9e7e88f 100644
+--- a/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java
++++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java
+@@ -389,7 +389,7 @@ public class SenseProvider implements ServiceProvider {
+     }
+ 
+     public SenseProvider(Context context, BiometricStateCallback biometricStateCallback, FaceSensorPropertiesInternal sensorProps, LockoutResetDispatcher lockoutResetDispatcher) {
+-        this(context, biometricStateCallback, sensorProps, lockoutResetDispatcher, new BiometricScheduler<>(context, 0, null));
++        this(context, biometricStateCallback, sensorProps, lockoutResetDispatcher, new BiometricScheduler(0, null));
+     }
+ 
+     private synchronized ISenseService getDaemon() {
+-- 
+2.47.1
+
