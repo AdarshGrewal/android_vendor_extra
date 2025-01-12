@@ -3,6 +3,10 @@
   <remote fetch="ssh://git@gitlab.incom.co:22/" name="gl-ssh" />
   <remote fetch="https://gitlab.com/" name="gitlab" />
 
+  <!-- extras -->
+  <project path="vendor/extra" remote="github" name="AdarshGrewal/android_vendor_extra" revision="lineage-22.1" />
+  <project path="vendor/lineage-priv/keys" remote="github" name="AdarshGrewal/android_vendor_lineage-priv_keys" revision="master" />
+
   <!-- partner_gms -->
   <project path="vendor/partner_gms" name="oddsolutions-gms/proprietary_vendor_partner_gms" remote="gl-ssh" revision="lineage-22.0" clone-depth="1" />
 
