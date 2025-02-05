@@ -6,15 +6,15 @@
 <resources>
     <!-- Build properties from a GMS certified device -->
     <string-array name="config_certifiedBuildProperties">
-        <item>PRODUCT:felix_beta</item>
-        <item>DEVICE:felix</item>
+        <item>PRODUCT:oriole_beta</item>
+        <item>DEVICE:oriole</item>
         <item>MANUFACTURER:Google</item>
         <item>BRAND:google</item>
-        <item>MODEL:Pixel Fold</item>
-        <item>ID:BP21.241121.009</item>
+        <item>MODEL:Pixel 6</item>
+        <item>ID:BP11.241121.013</item>
         <item>VERSION.RELEASE:15</item>
-        <item>VERSION.INCREMENTAL:12787338</item>
-        <item>FINGERPRINT:google/felix_beta/felix:Baklava/BP21.241121.009/12787338:user/release-keys</item>
+        <item>VERSION.INCREMENTAL:12873528</item>
+        <item>FINGERPRINT:google/oriole_beta/oriole:15/BP11.241121.013/12873528:user/release-keys</item>
         <item>VERSION.SECURITY_PATCH:2024-12-05</item>
         <item>VERSION.DEVICE_INITIAL_SDK_INT:21</item>
     </string-array>
