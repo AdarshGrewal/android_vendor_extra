@@ -1,0 +1,15 @@
+{
+  "BRAND": "google",
+  "DEVICE": "cheetah",
+  "FINGERPRINT": "google/cheetah_beta/cheetah:15/AP41.240823.009/12329489:user/release-keys",
+  "ID": "AP41.240823.009",
+  "MANUFACTURER": "Google",
+  "MODEL": "Pixel 7 Pro",
+  "PRODUCT": "cheetah_beta",
+  "VERSION": {
+    "DEVICE_INITIAL_SDK_INT": 32,
+    "SECURITY_PATCH": "2024-09-05",
+    "RELEASE": "15",
+    "INCREMENTAL": "12329489"
+  }
+}
