@@ -18,4 +18,7 @@
   <project name="OddSolutionsGMS/proprietary_vendor_partner_gms" path="vendor/partner_gms" remote="gl-bf-ssh" />
   <project path="vendor/pixel/extract-utils" remote="gitlab" name="loonage/android_vendor_pixel_extract-utils" revision="lineage-23.0" />
   <project path="vendor/pixel/clocks" remote="gitlab" name="loonage/proprietary_vendor_pixel_clocks" revision="lineage-23.2" />
+
+  <!-- Spoofify -->
+  <project path="packages/apps/Spoofify" remote="github" name="loonage/android_packages_apps_Spoofify" revision="sixteen" />
 </manifest>
