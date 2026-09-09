@@ -28,6 +28,10 @@ PRODUCT_PACKAGES += \
     ExtraSettingsResTarget \
     ExtraUpdaterOverlay
 
+# Spoofify
+PRODUCT_PACKAGES += \
+    Spoofify
+
 # Sysconfig
 PRODUCT_COPY_FILES += \
     vendor/extra/prebuilt/common/etc/sysconfig/pixel_2016_exclusive.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/sysconfig/pixel_2016_exclusive.xml
