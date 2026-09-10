@@ -1,0 +1,146 @@
+From 34f59fc94a86d14e5feb100683e5b56b94382e3a Mon Sep 17 00:00:00 2001
+From: someone5678 <someone5678@users.noreply.github.com>
+Date: Wed, 5 Jun 2024 20:19:29 +0900
+Subject: [PATCH 2/2] Settings: Forcefully enable Hotspot Speed setting
+
+* Follows device's configurations, not country code
+
+Change-Id: Ifbbd3a746345da2790cc6582ac0d3e0524bf4ba8
+Signed-off-by: someone5678 <someone5678@users.noreply.github.com>
+Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
+Signed-off-by: Saikrishna1504 <saikrishna26918@gmail.com>
+---
+ .../repository/WifiHotspotRepository.java     | 64 +------------------
+ .../tether/WifiHotspotSpeedViewModel.java     |  1 -
+ 2 files changed, 2 insertions(+), 63 deletions(-)
+
+diff --git a/src/com/android/settings/wifi/repository/WifiHotspotRepository.java b/src/com/android/settings/wifi/repository/WifiHotspotRepository.java
+index 18b4bb59d6f..4f8f99dfd13 100644
+--- a/src/com/android/settings/wifi/repository/WifiHotspotRepository.java
++++ b/src/com/android/settings/wifi/repository/WifiHotspotRepository.java
+@@ -104,7 +104,6 @@ public class WifiHotspotRepository {
+     protected Boolean mIs6gBandSupported;
+     protected SapBand mBand6g = new SapBand(WifiScanner.WIFI_BAND_6_GHZ);
+     protected MutableLiveData<Boolean> m6gAvailable;
+-    protected ActiveCountryCodeChangedCallback mActiveCountryCodeChangedCallback;
+ 
+     @VisibleForTesting
+     Boolean mIsConfigShowSpeed;
+@@ -205,25 +204,11 @@ public class WifiHotspotRepository {
+         updateSpeedType();
+     }
+ 
+-    /**
+-     * Set to auto refresh data.
+-     *
+-     * @param enabled whether the auto refresh should be enabled or not.
+-     */
+-    public void setAutoRefresh(boolean enabled) {
+-        if (enabled) {
+-            startAutoRefresh();
+-        } else {
+-            stopAutoRefresh();
+-        }
+-    }
+-
+     /**
+      * Gets SecurityType LiveData
+      */
+     public LiveData<Integer> getSecurityType() {
+         if (mSecurityType == null) {
+-            startAutoRefresh();
+             mSecurityType = new MutableLiveData<>();
+             updateSecurityType();
+             log("getSecurityType():" + mSecurityType.getValue());
+@@ -276,7 +261,6 @@ public class WifiHotspotRepository {
+      */
+     public LiveData<Integer> getSpeedType() {
+         if (mSpeedType == null) {
+-            startAutoRefresh();
+             mSpeedType = new MutableLiveData<>();
+             updateSpeedType();
+             log("getSpeedType():" + mSpeedType.getValue());
+@@ -398,10 +382,7 @@ public class WifiHotspotRepository {
+      * @return {@code true} if Wi-Fi Hotspot 5 GHz Band is available
+      */
+     public boolean is5gAvailable() {
+-        if (!mBand5g.isChannelsReady && is5GHzBandSupported()) {
+-            isChannelAvailable(mBand5g);
+-        }
+-        return mBand5g.isAvailable();
++        return is5GHzBandSupported();
+     }
+ 
+     /**
+@@ -440,10 +421,7 @@ public class WifiHotspotRepository {
+      * @return {@code true} if Wi-Fi Hotspot 6 GHz Band is available
+      */
+     public boolean is6gAvailable() {
+-        if (!mBand6g.isChannelsReady && is6GHzBandSupported()) {
+-            isChannelAvailable(mBand6g);
+-        }
+-        return mBand6g.isAvailable();
++        return is6GHzBandSupported();
+     }
+ 
+     /**
+@@ -531,44 +509,6 @@ public class WifiHotspotRepository {
+         return true;
+     }
+ 
+-    protected void purgeRefreshData() {
+-        mBand5g.isChannelsReady = false;
+-        mBand6g.isChannelsReady = false;
+-    }
+-
+-    protected void startAutoRefresh() {
+-        if (mActiveCountryCodeChangedCallback != null) {
+-            return;
+-        }
+-        log("startMonitorSoftApConfiguration()");
+-        mActiveCountryCodeChangedCallback = new ActiveCountryCodeChangedCallback();
+-        mWifiManager.registerActiveCountryCodeChangedCallback(mAppContext.getMainExecutor(),
+-                mActiveCountryCodeChangedCallback);
+-    }
+-
+-    protected void stopAutoRefresh() {
+-        if (mActiveCountryCodeChangedCallback == null) {
+-            return;
+-        }
+-        log("stopMonitorSoftApConfiguration()");
+-        mWifiManager.unregisterActiveCountryCodeChangedCallback(mActiveCountryCodeChangedCallback);
+-        mActiveCountryCodeChangedCallback = null;
+-    }
+-
+-    protected class ActiveCountryCodeChangedCallback implements
+-            WifiManager.ActiveCountryCodeChangedCallback {
+-        @Override
+-        public void onActiveCountryCodeChanged(String country) {
+-            log("onActiveCountryCodeChanged(), country:" + country);
+-            purgeRefreshData();
+-            refresh();
+-        }
+-
+-        @Override
+-        public void onCountryCodeInactive() {
+-        }
+-    }
+-
+     /**
+      * Return whether Wi-Fi Hotspot is restarting or not.
+      *
+diff --git a/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java b/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java
+index ddf8d3fa89d..d750014dfb4 100644
+--- a/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java
++++ b/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java
+@@ -70,7 +70,6 @@ public class WifiHotspotSpeedViewModel extends AndroidViewModel {
+         mWifiHotspotRepository.get6gAvailable().observeForever(m6gAvailableObserver);
+         mWifiHotspotRepository.get5gAvailable().observeForever(m5gAvailableObserver);
+         mWifiHotspotRepository.getSpeedType().observeForever(mSpeedTypeObserver);
+-        mWifiHotspotRepository.setAutoRefresh(true);
+ 
+         // The visibility of the 6 GHz speed option will not change on a Pixel device.
+         mSpeedInfo6g.mIsVisible = mWifiHotspotRepository.is6GHzBandSupported();
+-- 
+2.55.0
+

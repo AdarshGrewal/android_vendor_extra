@@ -1,0 +1,80 @@
+From 45173a14d74aa177ee7a645a6cff60b8b7e0342f Mon Sep 17 00:00:00 2001
+From: AdarshGrewal <adarshgrewal@gmail.com>
+Date: Sat, 5 Sep 2026 11:42:28 +0530
+Subject: [PATCH 27/30] PropImitationHooks: Simplify feature handling
+
+Change-Id: I0b50df7894b696a1f5dc4225bcb80f66e352874d
+---
+ .../internal/util/PropImitationHooks.java     | 42 ++++---------------
+ 1 file changed, 7 insertions(+), 35 deletions(-)
+
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index 37d81dbab232..bbc6d757c1e8 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -61,8 +61,10 @@ public class PropImitationHooks {
+     private static final ComponentName GMS_ADD_ACCOUNT_ACTIVITY = ComponentName.unflattenFromString(
+             "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity");
+ 
+-    private static final String FEATURE_NEXUS_PRELOAD =
+-            "com.google.android.apps.photos.NEXUS_PRELOAD";
++    private static final Set<String> sNexusFeatures = Set.of(
++        "NEXUS_PRELOAD",
++        "nexus_preload"
++    );
+ 
+     private static final Map<String, String> sPixelOneProps = Map.of(
+         "PRODUCT", "sailfish",
+@@ -73,30 +75,6 @@ public class PropImitationHooks {
+         "FINGERPRINT", "google/sailfish/sailfish:10/QP1A.191005.007.A3/5972272:user/release-keys"
+     );
+ 
+-    private static final Set<String> sPixelFeatures = Set.of(
+-        "PIXEL_2017_EXPERIENCE",
+-        "PIXEL_2017_PRELOAD",
+-        "PIXEL_2018_EXPERIENCE",
+-        "PIXEL_2018_PRELOAD",
+-        "PIXEL_2019_EXPERIENCE",
+-        "PIXEL_2019_MIDYEAR_EXPERIENCE",
+-        "PIXEL_2019_MIDYEAR_PRELOAD",
+-        "PIXEL_2019_PRELOAD",
+-        "PIXEL_2020_EXPERIENCE",
+-        "PIXEL_2020_MIDYEAR_EXPERIENCE",
+-        "PIXEL_2021_MIDYEAR_EXPERIENCE"
+-    );
+-
+-    private static final Set<String> sTensorFeatures = Set.of(
+-        "PIXEL_2021_EXPERIENCE",
+-        "PIXEL_2022_EXPERIENCE",
+-        "PIXEL_2022_MIDYEAR_EXPERIENCE",
+-        "PIXEL_2023_EXPERIENCE",
+-        "PIXEL_2023_MIDYEAR_EXPERIENCE",
+-        "PIXEL_2024_EXPERIENCE",
+-        "PIXEL_2024_MIDYEAR_EXPERIENCE"
+-    );
+-
+     private static volatile String[] sCertifiedProps;
+ 
+     private static volatile String sProcessName;
+@@ -267,15 +245,9 @@ public class PropImitationHooks {
+     }
+ 
+     public static boolean hasSystemFeature(String name, boolean has) {
+-        if (sIsPhotos) {
+-            if (has && (sPixelFeatures.stream().anyMatch(name::contains)
+-                    || sTensorFeatures.stream().anyMatch(name::contains))) {
+-                dlog("Blocked system feature " + name + " for Google Photos");
+-                has = false;
+-            } else if (!has && name.equalsIgnoreCase(FEATURE_NEXUS_PRELOAD)) {
+-                dlog("Enabled system feature " + name + " for Google Photos");
+-                has = true;
+-            }
++        if (sIsPhotos && !has && sNexusFeatures.stream().anyMatch(name::contains)) {
++            dlog("Enabled system feature " + name + " for Google Photos");
++            has = true;
+         }
+         return has;
+     }
+-- 
+2.55.0
+

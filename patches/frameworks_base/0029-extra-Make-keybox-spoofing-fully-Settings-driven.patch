@@ -1,0 +1,215 @@
+From b988f653e222f42ee986f23a441f810ee8a32859 Mon Sep 17 00:00:00 2001
+From: AdarshGrewal <adarshgrewal@gmail.com>
+Date: Sat, 5 Sep 2026 16:00:25 +0530
+Subject: [PATCH 29/30] extra: Make keybox spoofing fully Settings-driven
+
+Change-Id: I7a4e2c8f1b5d90e6c3a8f4b2d9e1c5a7b3f6d0e2a
+---
+ core/java/android/provider/Settings.java      |  7 +++
+ .../internal/util/PropImitationHooks.java     |  9 +--
+ .../util/extra/KeyProviderManager.java        | 61 +++++++++++--------
+ core/res/res/values/extra_config.xml          | 18 ------
+ core/res/res/values/extra_symbols.xml         |  5 --
+ .../validators/SecureSettingsValidators.java  |  1 +
+ 6 files changed, 46 insertions(+), 55 deletions(-)
+ delete mode 100644 core/res/res/values/extra_config.xml
+ delete mode 100644 core/res/res/values/extra_symbols.xml
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index b577379128ae..7ecbf3d4e39b 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -13348,6 +13348,13 @@ public final class Settings {
+         @Readable
+         public static final String CERTIFIED_PROPS_DATA = "certified_props_data";
+ 
++        /**
++         * Master switch for keybox spoofing.
++         * @hide
++         */
++        @Readable
++        public static final String SPOOF_KEYBOX = "spoof_keybox";
++
+         /**
+          * Master switch for build-property spoofing.
+          * @hide
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index 511823f41538..ef4c9b5d6bbf 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -26,7 +26,6 @@ import android.content.Context;
+ import android.os.Build;
+ import android.os.Binder;
+ import android.os.Process;
+-import android.os.SystemProperties;
+ import android.text.TextUtils;
+ import android.util.Log;
+ 
+@@ -47,9 +46,6 @@ public class PropImitationHooks {
+     private static final String TAG = "PropImitationHooks";
+     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
+ 
+-    private static final Boolean sDisableKeyAttestationBlock = SystemProperties.getBoolean(
+-            "persist.sys.pihooks.disable.gms_key_attestation_block", false);
+-
+     private static final String PACKAGE_FINSKY = "com.android.vending";
+     private static final String PACKAGE_GMS = "com.google.android.gms";
+     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
+@@ -200,8 +196,9 @@ public class PropImitationHooks {
+     }
+ 
+     public static void onEngineGetCertificateChain() {
+-        if (sDisableKeyAttestationBlock) {
+-            dlog("Key attestation blocking is disabled by user");
++        // Fully disabled: let real key attestation through.
++        if (!KeyProviderManager.isSpoofingEnabled()) {
++            dlog("Keybox spoofing is disabled, not blocking key attestation");
+             return;
+         }
+ 
+diff --git a/core/java/com/android/internal/util/extra/KeyProviderManager.java b/core/java/com/android/internal/util/extra/KeyProviderManager.java
+index 69f39850a46a..2829ce0d30c1 100644
+--- a/core/java/com/android/internal/util/extra/KeyProviderManager.java
++++ b/core/java/com/android/internal/util/extra/KeyProviderManager.java
+@@ -10,7 +10,6 @@ import android.provider.Settings;
+ import android.util.Log;
+ import android.util.Xml;
+ 
+-import com.android.internal.R;
+ import org.xmlpull.v1.XmlPullParser;
+ 
+ import java.io.StringReader;
+@@ -35,6 +34,33 @@ public final class KeyProviderManager {
+         return getProvider().hasKeybox();
+     }
+ 
++    public static boolean isSpoofingEnabled() {
++        Context context = getApplicationContext();
++        if (context == null) {
++            return true;
++        }
++        return isSpoofEnabled(context);
++    }
++
++    private static boolean isSpoofEnabled(Context ctx) {
++        try {
++            return Settings.Secure.getInt(ctx.getContentResolver(),
++                    Settings.Secure.SPOOF_KEYBOX, 1) != 0;
++        } catch (Exception e) {
++            Log.e(TAG, "Failed to read " + Settings.Secure.SPOOF_KEYBOX, e);
++            return true;
++        }
++    }
++
++    private static Context getApplicationContext() {
++        try {
++            return ActivityThread.currentApplication().getApplicationContext();
++        } catch (Exception e) {
++            Log.e(TAG, "Error getting application context", e);
++            return null;
++        }
++    }
++
+     private static class DefaultKeyboxProvider implements IKeyboxProvider {
+         private final Map<String, String> keyboxData = new HashMap<>();
+ 
+@@ -45,12 +71,17 @@ public final class KeyProviderManager {
+                 return;
+             }
+ 
+-            if (!loadFromXmlSetting(context)) {
+-                loadFromConfigArray(context);
++            if (!isSpoofEnabled(context)) {
++                Log.i(TAG, "Keybox spoofing disabled, using real attestation");
++                return;
++            }
++
++            if (!parseXmlSetting(context)) {
++                keyboxData.clear();
+             }
+         }
+ 
+-        private boolean loadFromXmlSetting(Context ctx) {
++        private boolean parseXmlSetting(Context ctx) {
+             try {
+                 String xml = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.KEYBOX_DATA);
+                 if (xml == null || xml.trim().isEmpty()) return false;
+@@ -137,28 +168,6 @@ public final class KeyProviderManager {
+             }
+         }
+ 
+-        private void loadFromConfigArray(Context ctx) {
+-            for (String entry : ctx.getResources().getStringArray(R.array.config_certifiedKeybox)) {
+-                String[] parts = entry.split(":", 2);
+-                if (parts.length == 2) {
+-                    keyboxData.put(parts[0], parts[1]);
+-                }
+-            }
+-
+-            if (!hasKeybox()) {
+-                Log.w(TAG, "Incomplete keybox provided by overlays");
+-            }
+-        }
+-
+-        private static Context getApplicationContext() {
+-            try {
+-                return ActivityThread.currentApplication().getApplicationContext();
+-            } catch (Exception e) {
+-                Log.e(TAG, "Error getting application context", e);
+-                return null;
+-            }
+-        }
+-
+         @Override
+         public boolean hasKeybox() {
+             return Arrays.asList("EC.PRIV", "EC.CERT_1", "EC.CERT_2", "EC.CERT_3",
+diff --git a/core/res/res/values/extra_config.xml b/core/res/res/values/extra_config.xml
+deleted file mode 100644
+index 9949daae6bb0..000000000000
+--- a/core/res/res/values/extra_config.xml
++++ /dev/null
+@@ -1,18 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+-    <!-- Keybox configuration for device certification -->
+-    <string-array name="config_certifiedKeybox" translatable="false">
+-      <!--
+-        Keybox entries for EC and RSA keys and certificates.
+-        These should be populated with valid data for device certification.
+-        <item>EC.PRIV:</item>
+-        <item>EC.CERT_1:</item>
+-        <item>EC.CERT_2:</item>
+-        <item>EC.CERT_3:</item>
+-        <item>RSA.PRIV:</item>
+-        <item>RSA.CERT_1:</item>
+-        <item>RSA.CERT_2:</item>
+-        <item>RSA.CERT_3:</item>
+-      -->
+-    </string-array>
+-</resources>
+diff --git a/core/res/res/values/extra_symbols.xml b/core/res/res/values/extra_symbols.xml
+deleted file mode 100644
+index c911c0d86a3e..000000000000
+--- a/core/res/res/values/extra_symbols.xml
++++ /dev/null
+@@ -1,5 +0,0 @@
+-<?xml version="1.0" encoding="utf-8"?>
+-<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+-    <!-- Prop/KeyboxImitationHooks -->
+-    <java-symbol type="array" name="config_certifiedKeybox" />
+-</resources>
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+index 101543f5bd0c..263027eac802 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+@@ -523,6 +523,7 @@ public class SecureSettingsValidators {
+                 new InclusiveIntegerRangeValidator(0, 1));
+         VALIDATORS.put(Secure.KEYBOX_DATA, ANY_STRING_VALIDATOR);
+         VALIDATORS.put(Secure.CERTIFIED_PROPS_DATA, ANY_STRING_VALIDATOR);
++        VALIDATORS.put(Secure.SPOOF_KEYBOX, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.SPOOF_PROPS, BOOLEAN_VALIDATOR);
+     }
+ }
+-- 
+2.55.0
+

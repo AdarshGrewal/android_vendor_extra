@@ -1,0 +1,66 @@
+From 9cfc27045ef9d2e90cab30ca0809e2568a36af37 Mon Sep 17 00:00:00 2001
+From: Akash Srivastava <akashniki@gmail.com>
+Date: Mon, 8 Sep 2025 17:56:26 +0200
+Subject: [PATCH 24/30] PropImitationHooks: Skip play Integrity props in
+ isolated processes
+
+* Isolated processes (e.g. com.android.vending:com.google.android.finsky.verifier.apkanalysis.service.ApkContentsScanService) cannot access content providers. Calling Settings.Secure.getString(...) during their application init triggers:
+
+* Log:
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: FATAL EXCEPTION: main
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: Process: com.android.vending:com.google.android.finsky.verifier.apkanalysis.service.ApkContentsScanService, PID: 16766
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: java.lang.RuntimeException: Unable to instantiate application com.google.android.finsky.application.classic.ClassicApplication package com.android.vending: java.lang.SecurityException: Isolated process not allowed to call getContentProvider
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.app.LoadedApk.makeApplicationInner(LoadedApk.java:1486)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.app.LoadedApk.makeApplicationInner(LoadedApk.java:1411)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:7827)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.app.ActivityThread.-$$Nest$mhandleBindApplication(Unknown Source:0)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2549)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:110)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:248)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:338)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:9137)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:593)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:940)
+09-06 22:51:42.792 16766 16766 E AndroidRuntime: Caused by: java.lang.SecurityException: Isolated process not allowed to call getContentProvider
+
+* Add Process.isIsolated() guard in setPlayIntegrityProps(Context) and return early. Also gate the call site in setProps(...) to avoid invoking setPlayIntegrityProps(...) from isolated processes, and log the skip.
+
+Change-Id: Iecf42b7ceb2f186128d0f1defbc45bcc4224e56a
+---
+ .../android/internal/util/PropImitationHooks.java    | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index 619428e11d8d..5def07d3d251 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -135,7 +135,11 @@ public class PropImitationHooks {
+          * Set Pixel XL for Google Photos
+          */
+         if (sIsGms || sIsFinsky) {
+-            setPlayIntegrityProps(context);
++            if (!android.os.Process.isIsolated()) {
++                setPlayIntegrityProps(context);
++            } else {
++                dlog("Not setting Play Integrity props in isolated process");
++            }
+         } else if (!sStockFp.isEmpty() && packageName.equals(PACKAGE_ARCORE)) {
+             dlog("Setting stock fingerprint for: " + packageName);
+             setPropValue("FINGERPRINT", sStockFp);
+@@ -172,6 +176,12 @@ public class PropImitationHooks {
+             return;
+         }
+ 
++        // Guard: isolated processes cannot access content providers (Settings.*).
++        if (android.os.Process.isIsolated()) {
++            dlog("Skipping setPlayIntegrityProps in isolated process");
++            return;
++        }
++
+         if (sCertifiedProps.length == 0) {
+             dlog("Certified props are not set");
+             return;
+-- 
+2.55.0
+

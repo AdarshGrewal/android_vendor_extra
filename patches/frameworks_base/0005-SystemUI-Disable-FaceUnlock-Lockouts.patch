@@ -1,7 +1,7 @@
-From 6a91f0db5222831f14a2958523e6f73086f063a4 Mon Sep 17 00:00:00 2001
+From c0568d5653116394b3f431d328065de1729115c5 Mon Sep 17 00:00:00 2001
 From: minaripenguin <minaripenguin@users.noreply.github.com>
 Date: Sun, 28 Apr 2024 08:22:52 +0800
-Subject: [PATCH 05/17] SystemUI: Disable FaceUnlock Lockouts
+Subject: [PATCH 05/30] SystemUI: Disable FaceUnlock Lockouts
 
 Change-Id: I2fb0b88deadc6c3ea78793d514c136c4d134bb6f
 Signed-off-by: minaripenguin <minaripenguin@users.noreply.github.com>
@@ -12,7 +12,7 @@ Signed-off-by: Dmitrii <bankersenator@gmail.com>
  2 files changed, 5 insertions(+), 13 deletions(-)
 
 diff --git a/packages/SystemUI/src/com/android/systemui/deviceentry/data/repository/DeviceEntryFaceAuthRepository.kt b/packages/SystemUI/src/com/android/systemui/deviceentry/data/repository/DeviceEntryFaceAuthRepository.kt
-index 48a062c8c228..477916dffa08 100644
+index 212bb8ec8128..c3ccb62fc1c1 100644
 --- a/packages/SystemUI/src/com/android/systemui/deviceentry/data/repository/DeviceEntryFaceAuthRepository.kt
 +++ b/packages/SystemUI/src/com/android/systemui/deviceentry/data/repository/DeviceEntryFaceAuthRepository.kt
 @@ -237,7 +237,7 @@ constructor(
@@ -59,5 +59,5 @@ index c87b3aaab6f8..92d144d9a73d 100644
  
      override fun isFaceAuthEnabledAndEnrolled(): Boolean =
 -- 
-2.52.0
+2.55.0
 

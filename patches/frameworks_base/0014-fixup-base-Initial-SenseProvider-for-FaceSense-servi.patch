@@ -1,7 +1,7 @@
-From 371882b975650bad41c2797e601b53ceef9d18a5 Mon Sep 17 00:00:00 2001
+From ea34c7c32f9aa6aff8a2b7f6fe1f52f84ed8134c Mon Sep 17 00:00:00 2001
 From: AdarshGrewal <adarshgrewal@gmail.com>
 Date: Sat, 17 Jan 2026 20:37:02 +0530
-Subject: [PATCH 16/17] fixup! base: Initial SenseProvider for FaceSense
+Subject: [PATCH 14/30] fixup! base: Initial SenseProvider for FaceSense
  service
 
 Change-Id: I505c83851bca48420b8e8c2f4a458fc41cb73e96
@@ -41,5 +41,5 @@ index 0fe4fb9d26ba..98c8bfa56a2e 100644
      }
  
 -- 
-2.52.0
+2.55.0
 

@@ -1,7 +1,7 @@
-From a85ef92b730c28890787b194741cfff016852a67 Mon Sep 17 00:00:00 2001
+From b32120839cb17729ba0b6351341868a9ff503db2 Mon Sep 17 00:00:00 2001
 From: minaripenguin <minaripenguin@users.noreply.github.com>
 Date: Sun, 17 Dec 2023 08:36:37 +0800
-Subject: [PATCH 09/17] SystemUI: Implement bouncer face unlock animation
+Subject: [PATCH 09/30] SystemUI: Implement bouncer face unlock animation
 
 mnri: move face indicator to top, rewrite code and fix inconsistencies
 
@@ -606,5 +606,5 @@ index 659efc3686a2..da03ddae1cec 100644
  
      @Override
 -- 
-2.52.0
+2.55.0
 

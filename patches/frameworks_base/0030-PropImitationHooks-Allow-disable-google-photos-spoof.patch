@@ -1,0 +1,116 @@
+From 45a58998baffad5b65bb845194fba779cf2c4559 Mon Sep 17 00:00:00 2001
+From: AdarshGrewal <adarshgrewal@gmail.com>
+Date: Sat, 5 Sep 2026 15:55:12 +0530
+Subject: [PATCH 30/30] PropImitationHooks: Allow disable google photos spoof
+
+Change-Id: I5f8a2d4c6e1b9f3a7c0d5e2b8f4a6c1e3d7b9f0a5
+---
+ core/java/android/provider/Settings.java      |  8 ++++++
+ .../internal/util/PropImitationHooks.java     | 25 ++++++++++++++++---
+ .../validators/SecureSettingsValidators.java  |  1 +
+ 3 files changed, 30 insertions(+), 4 deletions(-)
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 7ecbf3d4e39b..e4906a905c2a 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -13348,6 +13348,14 @@ public final class Settings {
+         @Readable
+         public static final String CERTIFIED_PROPS_DATA = "certified_props_data";
+ 
++        /**
++         * Whether to spoof a Google Pixel device to Google Photos for unlimited
++         * original-quality backup.
++         * @hide
++         */
++        @Readable
++        public static final String SPOOF_GOOGLE_PHOTOS = "spoof_google_photos";
++
+         /**
+          * Master switch for keybox spoofing.
+          * @hide
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index ef4c9b5d6bbf..c323407d5879 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -26,6 +26,7 @@ import android.content.Context;
+ import android.os.Build;
+ import android.os.Binder;
+ import android.os.Process;
++import android.provider.Settings;
+ import android.text.TextUtils;
+ import android.util.Log;
+ 
+@@ -69,7 +70,7 @@ public class PropImitationHooks {
+     );
+ 
+     private static volatile String sProcessName;
+-    private static volatile boolean sIsGms, sIsFinsky, sIsPhotos;
++    private static volatile boolean sIsGms, sIsFinsky, sIsPhotos, sPhotosSpoofEnabled = true;
+ 
+     public static void setProps(Context context) {
+         final String packageName = context.getPackageName();
+@@ -84,6 +85,7 @@ public class PropImitationHooks {
+         sIsGms = packageName.equals(PACKAGE_GMS) && processName.equals(PROCESS_GMS_UNSTABLE);
+         sIsFinsky = packageName.equals(PACKAGE_FINSKY);
+         sIsPhotos = packageName.equals(PACKAGE_GPHOTOS);
++        sPhotosSpoofEnabled = isPhotosSpoofEnabled(context);
+ 
+         /* Set Certified Properties for GMSCore
+          * Set Pixel for Google Photos
+@@ -95,8 +97,12 @@ public class PropImitationHooks {
+                 dlog("Not setting Play Integrity props in isolated process");
+             }
+         } else if (sIsPhotos) {
+-            dlog("Spoofing Pixel 1 for Google Photos");
+-            sPixelOneProps.forEach((PropImitationHooks::setPropValue));
++            if (sPhotosSpoofEnabled) {
++                dlog("Spoofing Pixel 1 for Google Photos");
++                sPixelOneProps.forEach((PropImitationHooks::setPropValue));
++            } else {
++                dlog("Google Photos spoofing is disabled");
++            }
+         }
+     }
+ 
+@@ -216,13 +222,24 @@ public class PropImitationHooks {
+     }
+ 
+     public static boolean hasSystemFeature(String name, boolean has) {
+-        if (sIsPhotos && !has && sNexusFeatures.stream().anyMatch(name::contains)) {
++        if (sIsPhotos && sPhotosSpoofEnabled && !has
++                && sNexusFeatures.stream().anyMatch(name::contains)) {
+             dlog("Enabled system feature " + name + " for Google Photos");
+             has = true;
+         }
+         return has;
+     }
+ 
++    private static boolean isPhotosSpoofEnabled(Context context) {
++        try {
++            return Settings.Secure.getInt(context.getContentResolver(),
++                    Settings.Secure.SPOOF_GOOGLE_PHOTOS, 1) != 0;
++        } catch (Exception e) {
++            Log.e(TAG, "Failed to read " + Settings.Secure.SPOOF_GOOGLE_PHOTOS, e);
++            return true;
++        }
++    }
++
+     public static void dlog(String msg) {
+         if (DEBUG) Log.d(TAG, "[" + sProcessName + "] " + msg);
+     }
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+index 263027eac802..d551236fa211 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+@@ -523,6 +523,7 @@ public class SecureSettingsValidators {
+                 new InclusiveIntegerRangeValidator(0, 1));
+         VALIDATORS.put(Secure.KEYBOX_DATA, ANY_STRING_VALIDATOR);
+         VALIDATORS.put(Secure.CERTIFIED_PROPS_DATA, ANY_STRING_VALIDATOR);
++        VALIDATORS.put(Secure.SPOOF_GOOGLE_PHOTOS, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.SPOOF_KEYBOX, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.SPOOF_PROPS, BOOLEAN_VALIDATOR);
+     }
+-- 
+2.55.0
+

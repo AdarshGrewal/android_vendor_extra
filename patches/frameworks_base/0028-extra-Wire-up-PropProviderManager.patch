@@ -1,0 +1,418 @@
+From f84288295d0e0fd5bcc2b2216449faa630d7d209 Mon Sep 17 00:00:00 2001
+From: AdarshGrewal <adarshgrewal@gmail.com>
+Date: Sat, 5 Sep 2026 16:26:50 +0530
+Subject: [PATCH 28/30] extra: Wire up PropProviderManager
+
+Change-Id: I3b7d1f9a5c2e8a4b6d0f1c3e5a7b9d2f4c6e8a0b
+---
+ core/java/android/provider/Settings.java      |  14 ++
+ .../internal/util/PropImitationHooks.java     |  50 ++-----
+ .../internal/util/extra/IPropProvider.java    |  31 ++++
+ .../util/extra/PropProviderManager.java       | 141 ++++++++++++++++++
+ core/res/res/values/extra_config.xml          |  15 --
+ core/res/res/values/extra_symbols.xml         |   1 -
+ .../validators/SecureSettingsValidators.java  |   2 +
+ 7 files changed, 200 insertions(+), 54 deletions(-)
+ create mode 100644 core/java/com/android/internal/util/extra/IPropProvider.java
+ create mode 100644 core/java/com/android/internal/util/extra/PropProviderManager.java
+
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index 10179e9f5f23..b577379128ae 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -13341,6 +13341,20 @@ public final class Settings {
+         @Readable
+         public static final String KEYBOX_DATA = "keybox_data";
+ 
++        /**
++         * User selectable PIH props.
++         * @hide
++         */
++        @Readable
++        public static final String CERTIFIED_PROPS_DATA = "certified_props_data";
++
++        /**
++         * Master switch for build-property spoofing.
++         * @hide
++         */
++        @Readable
++        public static final String SPOOF_PROPS = "spoof_props";
++
+         /**
+          * Keys we no longer back up under the current schema, but want to continue to
+          * process when restoring historical backup datasets.
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index bbc6d757c1e8..511823f41538 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -30,8 +30,8 @@ import android.os.SystemProperties;
+ import android.text.TextUtils;
+ import android.util.Log;
+ 
+-import com.android.internal.R;
+ import com.android.internal.util.extra.KeyProviderManager;
++import com.android.internal.util.extra.PropProviderManager;
+ 
+ import java.lang.reflect.Field;
+ import java.util.Arrays;
+@@ -47,9 +47,6 @@ public class PropImitationHooks {
+     private static final String TAG = "PropImitationHooks";
+     private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
+ 
+-    private static final Boolean sDisableGmsProps = SystemProperties.getBoolean(
+-            "persist.sys.pihooks.disable.gms_props", false);
+-
+     private static final Boolean sDisableKeyAttestationBlock = SystemProperties.getBoolean(
+             "persist.sys.pihooks.disable.gms_key_attestation_block", false);
+ 
+@@ -75,8 +72,6 @@ public class PropImitationHooks {
+         "FINGERPRINT", "google/sailfish/sailfish:10/QP1A.191005.007.A3/5972272:user/release-keys"
+     );
+ 
+-    private static volatile String[] sCertifiedProps;
+-
+     private static volatile String sProcessName;
+     private static volatile boolean sIsGms, sIsFinsky, sIsPhotos;
+ 
+@@ -89,14 +84,6 @@ public class PropImitationHooks {
+             return;
+         }
+ 
+-        final Resources res = context.getResources();
+-        if (res == null) {
+-            Log.e(TAG, "Null resources");
+-            return;
+-        }
+-
+-        sCertifiedProps = res.getStringArray(R.array.config_certifiedBuildProperties);
+-
+         sProcessName = processName;
+         sIsGms = packageName.equals(PACKAGE_GMS) && processName.equals(PROCESS_GMS_UNSTABLE);
+         sIsFinsky = packageName.equals(PACKAGE_FINSKY);
+@@ -106,7 +93,7 @@ public class PropImitationHooks {
+          * Set Pixel for Google Photos
+          */
+         if (sIsGms || sIsFinsky) {
+-            if (!android.os.Process.isIsolated()) {
++            if (!Process.isIsolated()) {
+                 setPlayIntegrityProps(context);
+             } else {
+                 dlog("Not setting Play Integrity props in isolated process");
+@@ -119,7 +106,7 @@ public class PropImitationHooks {
+ 
+     private static void setPropValue(String key, String value) {
+         try {
+-            dlog("Setting prop " + key + " to " + value.toString());
++            dlog("Setting prop " + key + " to " + value);
+             Class clazz = Build.class;
+             if (key.startsWith("VERSION.")) {
+                 clazz = Build.VERSION.class;
+@@ -136,19 +123,16 @@ public class PropImitationHooks {
+     }
+ 
+     private static void setPlayIntegrityProps(Context context) {
+-        if (sDisableGmsProps) {
+-            dlog("GMS prop imitation is disabled by user");
+-            return;
+-        }
+-
+         // Guard: isolated processes cannot access content providers (Settings.*).
+-        if (android.os.Process.isIsolated()) {
++        if (Process.isIsolated()) {
+             dlog("Skipping setPlayIntegrityProps in isolated process");
+             return;
+         }
+ 
+-        if (sCertifiedProps.length == 0) {
+-            dlog("Certified props are not set");
++        final Map<String, String> certifiedProps =
++                PropProviderManager.getProvider(context).getProps();
++        if (certifiedProps.isEmpty()) {
++            dlog("Certified props are not set or spoofing is disabled");
+             return;
+         }
+ 
+@@ -164,12 +148,14 @@ public class PropImitationHooks {
+                 }
+             }
+         };
++
+         if (!was) {
+             dlog("Spoofing build for GMS / Finsky");
+-            setCertifiedProps();
++            certifiedProps.forEach((PropImitationHooks::setPropValue));
+         } else {
+             dlog("Skip spoofing build for GMS / Finsky, because GmsAddAccountActivityOnTop");
+         }
++
+         try {
+             ActivityTaskManager.getService().registerTaskStackListener(taskStackListener);
+         } catch (Exception e) {
+@@ -177,18 +163,6 @@ public class PropImitationHooks {
+         }
+     }
+ 
+-    private static void setCertifiedProps() {
+-        for (String entry : sCertifiedProps) {
+-            // Each entry must be of the format FIELD:value
+-            final String[] fieldAndProp = entry.split(":", 2);
+-            if (fieldAndProp.length != 2) {
+-                Log.e(TAG, "Invalid entry in certified props: " + entry);
+-                continue;
+-            }
+-            setPropValue(fieldAndProp[0], fieldAndProp[1]);
+-        }
+-    }
+-
+     private static boolean isGmsAddAccountActivityOnTop() {
+         try {
+             final ActivityTaskManager.RootTaskInfo focusedTask =
+@@ -202,7 +176,7 @@ public class PropImitationHooks {
+     }
+ 
+     public static boolean shouldBypassTaskPermission(Context context) {
+-        if (sDisableGmsProps) {
++        if (!PropProviderManager.isSpoofingEnabled(context)) {
+             return false;
+         }
+ 
+diff --git a/core/java/com/android/internal/util/extra/IPropProvider.java b/core/java/com/android/internal/util/extra/IPropProvider.java
+new file mode 100644
+index 000000000000..daec987ad092
+--- /dev/null
++++ b/core/java/com/android/internal/util/extra/IPropProvider.java
+@@ -0,0 +1,31 @@
++package com.android.internal.util.extra;
++
++import java.util.Map;
++
++
++/**
++ * Interface for prop providers.
++ *
++ * This interface defines the methods that a prop provider must implement
++ * to provide access to build properties.
++ *
++ * @hide
++ */
++public interface IPropProvider {
++
++    /**
++     * Checks if a valid set of props is available.
++     *
++     * @return true if a valid set of props is available, false otherwise
++     * @hide
++     */
++    boolean hasProps();
++
++    /**
++     * Retrieves the PIH properties.
++     *
++     * @return the PIH properties as a Map
++     * @hide
++     */
++    Map<String, String> getProps();
++}
+diff --git a/core/java/com/android/internal/util/extra/PropProviderManager.java b/core/java/com/android/internal/util/extra/PropProviderManager.java
+new file mode 100644
+index 000000000000..8973e063333e
+--- /dev/null
++++ b/core/java/com/android/internal/util/extra/PropProviderManager.java
+@@ -0,0 +1,141 @@
++package com.android.internal.util.extra;
++
++import android.content.Context;
++import android.provider.Settings;
++import android.util.Log;
++
++import org.json.JSONArray;
++import org.json.JSONException;
++import org.json.JSONObject;
++
++import java.util.HashMap;
++import java.util.Iterator;
++import java.util.Map;
++import java.util.Set;
++
++/**
++ * Manager class for handling build-property providers.
++ * @hide
++ */
++public final class PropProviderManager {
++    private static final String TAG = "PropProviderManager";
++    private static final String VERSION_PREFIX = "VERSION.";
++    private static final Set<String> VERSION_FIELDS = Set.of(
++        "SECURITY_PATCH",
++        "DEVICE_INITIAL_SDK_INT",
++        "RELEASE",
++        "RELEASE_OR_CODENAME",
++        "INCREMENTAL",
++        "SDK_INT",
++        "PREVIEW_SDK_INT",
++        "BASE_OS",
++        "CODENAME"
++    );
++
++    private PropProviderManager() {}
++
++    public static IPropProvider getProvider(Context context) {
++        return new DefaultPropProvider(context);
++    }
++
++    public static boolean isSpoofingEnabled(Context context) {
++        return isSpoofEnabled(context);
++    }
++
++    private static String normalizeKey(String name) {
++        if (name.startsWith(VERSION_PREFIX)) {
++            return name;
++        }
++        if ("FIRST_API_LEVEL".equals(name)) {
++            return VERSION_PREFIX + "DEVICE_INITIAL_SDK_INT";
++        }
++        if ("BUILD_ID".equals(name)) {
++            return "ID";
++        }
++        if (VERSION_FIELDS.contains(name)) {
++            return VERSION_PREFIX + name;
++        }
++        return name;
++    }
++
++    private static boolean isSpoofEnabled(Context ctx) {
++        try {
++            return Settings.Secure.getInt(ctx.getContentResolver(),
++                    Settings.Secure.SPOOF_PROPS, 1) != 0;
++        } catch (Exception e) {
++            Log.e(TAG, "Failed to read " + Settings.Secure.SPOOF_PROPS, e);
++            return true;
++        }
++    }
++
++    private static class DefaultPropProvider implements IPropProvider {
++        private final Map<String, String> props = new HashMap<>();
++
++        private DefaultPropProvider(Context context) {
++            if (context == null) {
++                Log.e(TAG, "Null context, cannot load props");
++                return;
++            }
++
++            if (!isSpoofEnabled(context)) {
++                Log.i(TAG, "Props spoofing disabled, reporting real build");
++                return;
++            }
++
++            loadFromJsonSetting(context);
++        }
++
++        private void loadFromJsonSetting(Context ctx) {
++            try {
++                String json = Settings.Secure.getString(
++                        ctx.getContentResolver(), Settings.Secure.CERTIFIED_PROPS_DATA);
++                if (json == null || json.trim().isEmpty()) {
++                    Log.i(TAG, "No props profile set");
++                    return;
++                }
++
++                JSONObject root = new JSONObject(json);
++                for (Iterator<String> keys = root.keys(); keys.hasNext(); ) {
++                    String name = keys.next();
++                    Object value = root.opt(name);
++                    if (value == null || value == JSONObject.NULL
++                            || value instanceof JSONObject || value instanceof JSONArray) {
++                        continue;
++                    }
++                    putProp(name, String.valueOf(value));
++                }
++
++                if (!hasProps()) {
++                    Log.w(TAG, "Props profile contained no usable entries");
++                    return;
++                }
++
++                Log.i(TAG, "Loaded " + props.size() + " props from JSON setting");
++            } catch (JSONException e) {
++                Log.e(TAG, "Malformed props JSON setting", e);
++                props.clear();
++            } catch (Exception e) {
++                Log.e(TAG, "JSON props load failed", e);
++                props.clear();
++            }
++        }
++
++        private void putProp(String name, String value) {
++            if (name == null || value == null) return;
++            String field = normalizeKey(name.trim());
++            String trimmed = value.trim();
++            if (field.isEmpty() || trimmed.isEmpty()) return;
++            props.put(field, trimmed);
++        }
++
++        @Override
++        public boolean hasProps() {
++            return !props.isEmpty();
++        }
++
++        @Override
++        public Map<String, String> getProps() {
++            return new HashMap<>(props);
++        }
++    }
++}
+diff --git a/core/res/res/values/extra_config.xml b/core/res/res/values/extra_config.xml
+index b13d4705eb99..9949daae6bb0 100644
+--- a/core/res/res/values/extra_config.xml
++++ b/core/res/res/values/extra_config.xml
+@@ -1,19 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+-    <!-- Build properties from a GMS certified device against current platform SPL level -->
+-    <string-array name="config_certifiedBuildProperties" translatable="false">
+-      <!--
+-        Each entry must be of the format
+-            FIELD:value
+-        with the field belonging to android.os.Build or android.os.Build.VERSION class.
+-        Example:
+-        <item>BRAND:foo</item>
+-        <item>DEVICE:bar</item>
+-        <item>FINGERPRINT:foo/bar/bar:1.0/lorem/ipsum:dolor/sit-amet</item>
+-        <item>VERSION.RELEASE:1.0</item>
+-      -->
+-    </string-array>
+-
+     <!-- Keybox configuration for device certification -->
+     <string-array name="config_certifiedKeybox" translatable="false">
+       <!--
+@@ -29,5 +15,4 @@
+         <item>RSA.CERT_3:</item>
+       -->
+     </string-array>
+-
+ </resources>
+diff --git a/core/res/res/values/extra_symbols.xml b/core/res/res/values/extra_symbols.xml
+index c82a4f8cdce9..c911c0d86a3e 100644
+--- a/core/res/res/values/extra_symbols.xml
++++ b/core/res/res/values/extra_symbols.xml
+@@ -1,6 +1,5 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+     <!-- Prop/KeyboxImitationHooks -->
+-    <java-symbol type="array" name="config_certifiedBuildProperties" />
+     <java-symbol type="array" name="config_certifiedKeybox" />
+ </resources>
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+index 2e14ca580c58..101543f5bd0c 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+@@ -522,5 +522,7 @@ public class SecureSettingsValidators {
+         VALIDATORS.put(Secure.IDENTITY_CHECK_NOTIFICATION_VIEW_DETAILS_CLICKED,
+                 new InclusiveIntegerRangeValidator(0, 1));
+         VALIDATORS.put(Secure.KEYBOX_DATA, ANY_STRING_VALIDATOR);
++        VALIDATORS.put(Secure.CERTIFIED_PROPS_DATA, ANY_STRING_VALIDATOR);
++        VALIDATORS.put(Secure.SPOOF_PROPS, BOOLEAN_VALIDATOR);
+     }
+ }
+-- 
+2.55.0
+

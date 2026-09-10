@@ -1,0 +1,142 @@
+From 01e58b0e46bbf7c3d9f1c75ad1a4abb61ec2dcea Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Sun, 19 Oct 2025 21:37:58 +0545
+Subject: [PATCH 20/30] PIHooks: Spoof Google Photos
+
+Imported from I2e66cba7c9098dd0063123db103407b2955d1c80.
+
+Change-Id: Ia216cbd711f6c8cac09aad60af11a0a049c5ff9d
+---
+ .../app/ApplicationPackageManager.java        |  4 +-
+ .../internal/util/PropImitationHooks.java     | 58 +++++++++++++++++++
+ 2 files changed, 61 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/android/app/ApplicationPackageManager.java b/core/java/android/app/ApplicationPackageManager.java
+index 71477f5ac982..26f5b73c6f3d 100644
+--- a/core/java/android/app/ApplicationPackageManager.java
++++ b/core/java/android/app/ApplicationPackageManager.java
+@@ -134,6 +134,7 @@ import com.android.internal.annotations.GuardedBy;
+ import com.android.internal.annotations.VisibleForTesting;
+ import com.android.internal.os.SomeArgs;
+ import com.android.internal.pm.RoSystemFeatures;
++import com.android.internal.util.PropImitationHooks;
+ import com.android.internal.util.UserIcons;
+ 
+ import com.nvidia.NvAppProfileService;
+@@ -856,7 +857,8 @@ public class ApplicationPackageManager extends PackageManager {
+                 return maybeHasSystemFeature;
+             }
+         }
+-        return mHasSystemFeatureCache.query(new HasSystemFeatureQuery(name, version));
++        return PropImitationHooks.hasSystemFeature(name,
++                mHasSystemFeatureCache.query(new HasSystemFeatureQuery(name, version)));
+     }
+ 
+     /** @hide */
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index 2229b899fa52..1182d3b23481 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -35,6 +35,8 @@ import com.android.internal.R;
+ 
+ import java.lang.reflect.Field;
+ import java.util.Arrays;
++import java.util.Map;
++import java.util.Set;
+ 
+ /**
+  * @hide
+@@ -55,10 +57,47 @@ public class PropImitationHooks {
+     private static final String PACKAGE_GMS = "com.google.android.gms";
+     private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
+     private static final String PACKAGE_NETFLIX = "com.netflix.mediaclient";
++    private static final String PACKAGE_GPHOTOS = "com.google.android.apps.photos";
+ 
+     private static final ComponentName GMS_ADD_ACCOUNT_ACTIVITY = ComponentName.unflattenFromString(
+             "com.google.android.gms/.auth.uiflows.minutemaid.MinuteMaidActivity");
+ 
++    private static final String FEATURE_NEXUS_PRELOAD =
++            "com.google.android.apps.photos.NEXUS_PRELOAD";
++
++    private static final Map<String, String> sPixelOneProps = Map.of(
++        "PRODUCT", "sailfish",
++        "DEVICE", "sailfish",
++        "MANUFACTURER", "Google",
++        "BRAND", "google",
++        "MODEL", "Pixel",
++        "FINGERPRINT", "google/sailfish/sailfish:10/QP1A.191005.007.A3/5972272:user/release-keys"
++    );
++
++    private static final Set<String> sPixelFeatures = Set.of(
++        "PIXEL_2017_EXPERIENCE",
++        "PIXEL_2017_PRELOAD",
++        "PIXEL_2018_EXPERIENCE",
++        "PIXEL_2018_PRELOAD",
++        "PIXEL_2019_EXPERIENCE",
++        "PIXEL_2019_MIDYEAR_EXPERIENCE",
++        "PIXEL_2019_MIDYEAR_PRELOAD",
++        "PIXEL_2019_PRELOAD",
++        "PIXEL_2020_EXPERIENCE",
++        "PIXEL_2020_MIDYEAR_EXPERIENCE",
++        "PIXEL_2021_MIDYEAR_EXPERIENCE"
++    );
++
++    private static final Set<String> sTensorFeatures = Set.of(
++        "PIXEL_2021_EXPERIENCE",
++        "PIXEL_2022_EXPERIENCE",
++        "PIXEL_2022_MIDYEAR_EXPERIENCE",
++        "PIXEL_2023_EXPERIENCE",
++        "PIXEL_2023_MIDYEAR_EXPERIENCE",
++        "PIXEL_2024_EXPERIENCE",
++        "PIXEL_2024_MIDYEAR_EXPERIENCE"
++    );
++
+     private static volatile String[] sCertifiedProps;
+     private static volatile String sStockFp, sNetflixModel;
+ 
+@@ -87,16 +126,21 @@ public class PropImitationHooks {
+         sProcessName = processName;
+         sIsGms = packageName.equals(PACKAGE_GMS) && processName.equals(PROCESS_GMS_UNSTABLE);
+         sIsFinsky = packageName.equals(PACKAGE_FINSKY);
++        sIsPhotos = packageName.equals(PACKAGE_GPHOTOS);
+ 
+         /* Set Certified Properties for GMSCore
+          * Set Stock Fingerprint for ARCore
+          * Set custom model for Netflix
++         * Set Pixel XL for Google Photos
+          */
+         if (sIsGms) {
+             setCertifiedPropsForGms();
+         } else if (!sStockFp.isEmpty() && packageName.equals(PACKAGE_ARCORE)) {
+             dlog("Setting stock fingerprint for: " + packageName);
+             setPropValue("FINGERPRINT", sStockFp);
++        } else if (sIsPhotos) {
++            dlog("Spoofing Pixel 1 for Google Photos");
++            sPixelOneProps.forEach((PropImitationHooks::setPropValue));
+         } else if (!sNetflixModel.isEmpty() && packageName.equals(PACKAGE_NETFLIX)) {
+             dlog("Setting model to " + sNetflixModel + " for Netflix");
+             setPropValue("MODEL", sNetflixModel);
+@@ -217,6 +261,20 @@ public class PropImitationHooks {
+         }
+     }
+ 
++    public static boolean hasSystemFeature(String name, boolean has) {
++        if (sIsPhotos) {
++            if (has && (sPixelFeatures.stream().anyMatch(name::contains)
++                    || sTensorFeatures.stream().anyMatch(name::contains))) {
++                dlog("Blocked system feature " + name + " for Google Photos");
++                has = false;
++            } else if (!has && name.equalsIgnoreCase(FEATURE_NEXUS_PRELOAD)) {
++                dlog("Enabled system feature " + name + " for Google Photos");
++                has = true;
++            }
++        }
++        return has;
++    }
++
+     public static void dlog(String msg) {
+         if (DEBUG) Log.d(TAG, "[" + sProcessName + "] " + msg);
+     }
+-- 
+2.55.0
+
