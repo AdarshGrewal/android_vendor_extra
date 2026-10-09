@@ -1,4 +1,4 @@
-From 5b94dcd03c525ea863b2aa70273d994ce397f66f Mon Sep 17 00:00:00 2001
+From 21af6234c106eaa4aa17f1e15e965fc6761439c3 Mon Sep 17 00:00:00 2001
 From: Abhay Singh Gill <abhaygill017@gmail.com>
 Date: Tue, 24 Dec 2024 11:08:26 +0530
 Subject: [PATCH 3/4] Launcher3: Update grid sizes from Pixel launcher
@@ -16,10 +16,10 @@ Signed-off-by: Abhay Singh Gill <abhaygill017@gmail.com>
  res/values-sw640dp/styles.xml                |  14 +
  res/values-sw700dp/styles.xml                |   8 +
  res/values/styles.xml                        |  50 ++
- res/xml/default_workspace_6x6.xml            | 171 -------
- res/xml/device_profiles.xml                  | 480 ++++++++++---------
+ res/xml/default_workspace_6x6.xml            | 171 ------
+ res/xml/device_profiles.xml                  | 519 +++++++++----------
  src/com/android/launcher3/LauncherFiles.java |   2 -
- 9 files changed, 370 insertions(+), 399 deletions(-)
+ 9 files changed, 366 insertions(+), 442 deletions(-)
  create mode 100644 res/values-sw600dp-land/styles.xml
  create mode 100644 res/values-sw640dp-land/styles.xml
  create mode 100644 res/values-sw640dp/styles.xml
@@ -129,10 +129,10 @@ index 0000000000..71e303346a
 +    </style>
 +</resources>
 diff --git a/res/values/styles.xml b/res/values/styles.xml
-index 63094a242b..8caf8f7c2b 100644
+index aaea321e1f..e26d0be184 100644
 --- a/res/values/styles.xml
 +++ b/res/values/styles.xml
-@@ -540,6 +540,48 @@
+@@ -499,6 +499,48 @@
          <item name="android:windowDrawsSystemBarBackgrounds">true</item>
      </style>
  
@@ -181,7 +181,7 @@ index 63094a242b..8caf8f7c2b 100644
      <style name="FolderStyleDefault">
          <item name="folderTopPadding">24dp</item>
          <item name="folderCellHeight">94dp</item>
-@@ -548,10 +590,18 @@
+@@ -507,10 +549,18 @@
          <item name="folderFooterHeight">56dp</item>
      </style>
  
@@ -378,7 +378,7 @@ index e0bad1cd1b..0000000000
 -
 -</favorites>
 diff --git a/res/xml/device_profiles.xml b/res/xml/device_profiles.xml
-index b2c1c2364e..aece22cbb7 100644
+index e1527f9cca..aece22cbb7 100644
 --- a/res/xml/device_profiles.xml
 +++ b/res/xml/device_profiles.xml
 @@ -26,32 +26,27 @@
@@ -446,8 +446,8 @@ index b2c1c2364e..aece22cbb7 100644
 -            launcher:iconTextSize="15.0"
 -            launcher:allAppsIconSize="60"
 -            launcher:allAppsIconTextSize="14.0"
-             launcher:allAppsBorderSpace="16"
-             launcher:allAppsCellHeight="104"
+-            launcher:allAppsBorderSpace="16"
+-            launcher:allAppsCellHeight="104"
 -            launcher:canBeDefault="true" />
 -
 -        <display-option
@@ -458,8 +458,8 @@ index b2c1c2364e..aece22cbb7 100644
 -            launcher:iconTextSize="15.0"
 -            launcher:allAppsIconSize="60"
 -            launcher:allAppsIconTextSize="14.0"
--            launcher:allAppsBorderSpace="16"
--            launcher:allAppsCellHeight="104"
+             launcher:allAppsBorderSpace="16"
+             launcher:allAppsCellHeight="104"
 -            launcher:canBeDefault="true" />
 +            launcher:allAppsIconSize="66"
 +            launcher:allAppsIconTextSize="14"
@@ -502,8 +502,8 @@ index b2c1c2364e..aece22cbb7 100644
 -            launcher:minHeightDps="450"
 -            launcher:iconImageSize="48"
 -            launcher:iconTextSize="13.0"
-             launcher:allAppsBorderSpace="16"
-             launcher:allAppsCellHeight="104"
+-            launcher:allAppsBorderSpace="16"
+-            launcher:allAppsCellHeight="104"
 -            launcher:canBeDefault="true" />
 -
 -        <display-option
@@ -532,8 +532,8 @@ index b2c1c2364e..aece22cbb7 100644
 -            launcher:minHeightDps="567"
 -            launcher:iconImageSize="54"
 -            launcher:iconTextSize="13.0"
--            launcher:allAppsBorderSpace="16"
--            launcher:allAppsCellHeight="104"
+             launcher:allAppsBorderSpace="16"
+             launcher:allAppsCellHeight="104"
 -            launcher:canBeDefault="true" />
 +            launcher:borderSpace="16"
 +            launcher:horizontalMargin="21.5"
@@ -655,7 +655,7 @@ index b2c1c2364e..aece22cbb7 100644
      </grid-option>
  
      <grid-option
-@@ -278,136 +222,222 @@
+@@ -278,183 +222,222 @@
          launcher:numFolderColumns="4"
          launcher:numHotseatIcons="5"
          launcher:dbFile="launcher_5_by_7.db"
@@ -810,6 +810,69 @@ index b2c1c2364e..aece22cbb7 100644
 -    </grid-option>
 -
 -    <grid-option
+-        launcher:name="desktop_6_by_5"
+-        launcher:numRows="5"
+-        launcher:numColumns="6"
+-        launcher:numSearchContainerColumns="3"
+-        launcher:numFolderRows="3"
+-        launcher:numFolderColumns="3"
+-        launcher:numHotseatIcons="6"
+-        launcher:numAllAppsColumns="6"
+-        launcher:isScalable="true"
+-        launcher:inlineNavButtonsEndSpacing="@dimen/taskbar_button_margin_6_5"
+-        launcher:devicePaddingId="@xml/paddings_6x5"
+-        launcher:dbFile="launcher_6_by_5.db"
+-        launcher:defaultLayoutId="@xml/default_workspace_6x5"
+-        launcher:deviceCategory="desktop" >
++            launcher:transientTaskbarIconSize="57.2"/>
+ 
+         <display-option
+-            launcher:name="Desktop"
+-            launcher:minWidthDps="900"
+-            launcher:minHeightDps="820"
+-            launcher:minCellHeight="120"
+-            launcher:minCellWidth="102"
+-            launcher:minCellHeightLandscape="104"
+-            launcher:minCellWidthLandscape="120"
+-            launcher:iconImageSize="60"
+-            launcher:iconTextSize="14"
+-            launcher:borderSpaceHorizontal="16"
+-            launcher:borderSpaceVertical="64"
+-            launcher:borderSpaceLandscapeHorizontal="64"
+-            launcher:borderSpaceLandscapeVertical="16"
+-            launcher:horizontalMargin="54"
+-            launcher:horizontalMarginLandscape="120"
+-            launcher:allAppsCellWidth="96"
++            launcher:allAppsBorderSpaceHorizontal="8"
++            launcher:allAppsBorderSpaceLandscapeHorizontal="12"
++            launcher:allAppsBorderSpaceLandscapeVertical="16"
++            launcher:allAppsBorderSpaceVertical="12"
+             launcher:allAppsCellHeight="142"
++            launcher:allAppsCellHeightLandscape="110"
++            launcher:allAppsCellWidth="92"
+             launcher:allAppsCellWidthLandscape="126"
+-            launcher:allAppsCellHeightLandscape="126"
+-            launcher:allAppsIconSize="60"
++            launcher:allAppsIconSize="66"
+             launcher:allAppsIconTextSize="14"
+-            launcher:allAppsBorderSpaceHorizontal="8"
+-            launcher:allAppsBorderSpaceVertical="16"
+-            launcher:allAppsBorderSpaceLandscape="16"
+-            launcher:hotseatBarBottomSpace="76"
++            launcher:borderSpaceHorizontal="16"
++            launcher:borderSpaceLandscapeHorizontal="50"
++            launcher:borderSpaceLandscapeVertical="16"
++            launcher:borderSpaceVertical="39.5"
++            launcher:canBeDefault="true"
++            launcher:horizontalMargin="45"
++            launcher:horizontalMarginLandscape="94"
++            launcher:hotseatBarBottomSpace="36"
+             launcher:hotseatBarBottomSpaceLandscape="40"
+-            launcher:canBeDefault="true" />
+-
+-    </grid-option>
+-
+-    <grid-option
 -        launcher:name="6_by_6"
 -        launcher:numRows="6"
 -        launcher:numColumns="6"
@@ -819,9 +882,8 @@ index b2c1c2364e..aece22cbb7 100644
 -        launcher:dbFile="launcher_6_by_6.db"
 -        launcher:defaultLayoutId="@xml/default_workspace_6x6"
 -        launcher:deviceCategory="phone|multi_display" >
-+            launcher:transientTaskbarIconSize="57.2"/>
- 
-         <display-option
+-
+-        <display-option
 -            launcher:name="Large Phone"
 -            launcher:minWidthDps="406"
 -            launcher:minHeightDps="694"
@@ -829,25 +891,6 @@ index b2c1c2364e..aece22cbb7 100644
 -            launcher:iconTextSize="12.0"
 -            launcher:allAppsBorderSpace="16"
 -            launcher:allAppsCellHeight="104"
-+            launcher:allAppsBorderSpaceHorizontal="8"
-+            launcher:allAppsBorderSpaceLandscapeHorizontal="12"
-+            launcher:allAppsBorderSpaceLandscapeVertical="16"
-+            launcher:allAppsBorderSpaceVertical="12"
-+            launcher:allAppsCellHeight="142"
-+            launcher:allAppsCellHeightLandscape="110"
-+            launcher:allAppsCellWidth="92"
-+            launcher:allAppsCellWidthLandscape="126"
-+            launcher:allAppsIconSize="66"
-+            launcher:allAppsIconTextSize="14"
-+            launcher:borderSpaceHorizontal="16"
-+            launcher:borderSpaceLandscapeHorizontal="50"
-+            launcher:borderSpaceLandscapeVertical="16"
-+            launcher:borderSpaceVertical="39.5"
-+            launcher:canBeDefault="true"
-+            launcher:horizontalMargin="45"
-+            launcher:horizontalMarginLandscape="94"
-+            launcher:hotseatBarBottomSpace="36"
-+            launcher:hotseatBarBottomSpaceLandscape="40"
 +            launcher:hotseatQsbSpace="32"
 +            launcher:iconImageSize="66"
 +            launcher:iconTextSize="14"
@@ -997,5 +1040,5 @@ index 5bb6f6852f..c266774ba9 100644
              LAUNCHER_4_BY_5_DB,
              LAUNCHER_4_BY_6_DB,
 -- 
-2.52.0
+2.56.0
 

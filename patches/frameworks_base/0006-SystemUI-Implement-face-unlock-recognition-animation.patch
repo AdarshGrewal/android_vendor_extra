@@ -1,4 +1,4 @@
-From 3148cb9b54abb96f9614ddef5cedd6a20e77763c Mon Sep 17 00:00:00 2001
+From 215c0363bf9a1d5138a1262d4fd9c776cecff1a2 Mon Sep 17 00:00:00 2001
 From: minaripenguin <minaripenguin@users.noreply.github.com>
 Date: Thu, 30 Nov 2023 10:39:01 +0800
 Subject: [PATCH 06/30] SystemUI: Implement face unlock recognition animation
@@ -84,7 +84,7 @@ index 000000000000..d63dacb1512e
 +      android:pathData="M12,16c-1.48,0 -2.75,-0.81 -3.45,-2L6.88,14c0.8,2.05 2.79,3.5 5.12,3.5s4.32,-1.45 5.12,-3.5h-1.67c-0.69,1.19 -1.97,2 -3.45,2zM11.99,2C6.47,2 2,6.48 2,12s4.47,10 9.99,10C17.52,22 22,17.52 22,12S17.52,2 11.99,2zM12,20c-4.42,0 -8,-3.58 -8,-8s3.58,-8 8,-8 8,3.58 8,8 -3.58,8 -8,8z"/>
 +</vector>
 diff --git a/packages/SystemUI/res/layout/keyguard_bottom_area.xml b/packages/SystemUI/res/layout/keyguard_bottom_area.xml
-index e602d6c8848d..26d7f803fb1d 100644
+index dea67092be59..c53da135d861 100644
 --- a/packages/SystemUI/res/layout/keyguard_bottom_area.xml
 +++ b/packages/SystemUI/res/layout/keyguard_bottom_area.xml
 @@ -30,6 +30,17 @@
@@ -117,10 +117,10 @@ index 000000000000..775a83dd35a2
 +    <string name="face_unlock_recognizing">Recognizing face...</string>
 +</resources>
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java b/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
-index 7f0926a44e01..a7e9d1c078d9 100644
+index 78b0da52dfba..1573796da3aa 100644
 --- a/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
 +++ b/packages/SystemUI/src/com/android/systemui/statusbar/KeyguardIndicationController.java
-@@ -116,6 +116,7 @@ import com.android.systemui.plugins.statusbar.StatusBarStateController;
+@@ -120,6 +120,7 @@ import com.android.systemui.plugins.statusbar.StatusBarStateController;
  import com.android.systemui.res.R;
  import com.android.systemui.securelockdevice.domain.interactor.SecureLockDeviceInteractor;
  import com.android.systemui.settings.UserTracker;
@@ -128,7 +128,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
  import com.android.systemui.statusbar.phone.KeyguardBypassController;
  import com.android.systemui.statusbar.phone.KeyguardIndicationTextView;
  import com.android.systemui.statusbar.phone.StatusBarKeyguardViewManager;
-@@ -155,6 +156,8 @@ public class KeyguardIndicationController {
+@@ -159,6 +160,8 @@ public class KeyguardIndicationController {
  
      private static final int MSG_SHOW_ACTION_TO_UNLOCK = 1;
      private static final int MSG_RESET_ERROR_MESSAGE_ON_SCREEN_ON = 2;
@@ -137,7 +137,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
      private static final long TRANSIENT_BIOMETRIC_ERROR_TIMEOUT = 1300;
      public static final long DEFAULT_MESSAGE_TIME = 3500;
      public static final long DEFAULT_HIDE_DELAY_MS =
-@@ -172,6 +175,7 @@ public class KeyguardIndicationController {
+@@ -176,6 +179,7 @@ public class KeyguardIndicationController {
      private final Lazy<SecureLockDeviceInteractor> mSecureLockDeviceInteractor;
  
      private ViewGroup mIndicationArea;
@@ -145,7 +145,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
      private KeyguardIndicationTextView mTopIndicationView;
      private KeyguardIndicationTextView mLockScreenIndicationView;
      private final IBatteryStats mBatteryInfo;
-@@ -234,6 +238,8 @@ public class KeyguardIndicationController {
+@@ -239,6 +243,8 @@ public class KeyguardIndicationController {
      private final FaceHelpMessageDeferral mFaceAcquiredMessageDeferral;
      private boolean mInited;
  
@@ -154,7 +154,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
      private KeyguardUpdateMonitorCallback mUpdateMonitorCallback;
  
      private boolean mDozing;
-@@ -277,6 +283,15 @@ public class KeyguardIndicationController {
+@@ -283,6 +289,15 @@ public class KeyguardIndicationController {
                  mBiometricErrorMessageToShowOnScreenOn = null;
              }
          }
@@ -170,7 +170,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
      };
      private boolean mFaceLockedOutThisAuthSession;
  
-@@ -370,6 +385,11 @@ public class KeyguardIndicationController {
+@@ -378,6 +393,11 @@ public class KeyguardIndicationController {
                      showActionToUnlock();
                  } else if (msg.what == MSG_RESET_ERROR_MESSAGE_ON_SCREEN_ON) {
                      mBiometricErrorMessageToShowOnScreenOn = null;
@@ -182,7 +182,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
                  }
              }
          };
-@@ -421,6 +441,7 @@ public class KeyguardIndicationController {
+@@ -430,6 +450,7 @@ public class KeyguardIndicationController {
  
      public void setIndicationArea(ViewGroup indicationArea) {
          mIndicationArea = indicationArea;
@@ -190,7 +190,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
          mTopIndicationView = indicationArea.findViewById(R.id.keyguard_indication_text);
          mLockScreenIndicationView = indicationArea.findViewById(
                  R.id.keyguard_indication_text_bottom);
-@@ -1044,6 +1065,12 @@ public class KeyguardIndicationController {
+@@ -1111,6 +1132,12 @@ public class KeyguardIndicationController {
              );
              return;
          }
@@ -203,7 +203,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
  
          if (mBiometricMessageSource != null && biometricSourceType == null) {
              // If there's a current biometric message showing and a non-biometric message
-@@ -1077,6 +1104,25 @@ public class KeyguardIndicationController {
+@@ -1144,6 +1171,25 @@ public class KeyguardIndicationController {
          }
      }
  
@@ -229,7 +229,7 @@ index 7f0926a44e01..a7e9d1c078d9 100644
      /**
       * Hides transient indication.
       */
-@@ -1592,8 +1638,17 @@ public class KeyguardIndicationController {
+@@ -1660,8 +1706,17 @@ public class KeyguardIndicationController {
          @Override
          public void onBiometricRunningStateChanged(boolean running,
                  BiometricSourceType biometricSourceType) {
@@ -249,14 +249,14 @@ index 7f0926a44e01..a7e9d1c078d9 100644
              }
          }
  
-@@ -1771,6 +1826,7 @@ public class KeyguardIndicationController {
+@@ -1839,6 +1894,7 @@ public class KeyguardIndicationController {
  
-             if (mDozing) {
-                 hideBiometricMessage();
-+                hideFaceUnlockRecognizingMessage();
-             }
-             updateDeviceEntryIndication(false);
-         }
+                     if (mDozing) {
+                         hideBiometricMessage();
++                        hideFaceUnlockRecognizingMessage();
+                     }
+                     updateDeviceEntryIndication(false);
+                 }
 diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/FaceUnlockImageView.kt b/packages/SystemUI/src/com/android/systemui/statusbar/phone/FaceUnlockImageView.kt
 new file mode 100644
 index 000000000000..5b6c7beff8dc
@@ -366,5 +366,5 @@ index 000000000000..5b6c7beff8dc
 +    }
 +}
 -- 
-2.55.0
+2.56.0
 

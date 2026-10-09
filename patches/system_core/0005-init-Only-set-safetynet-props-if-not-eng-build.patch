@@ -1,4 +1,4 @@
-From 1dd15b56591befb705287e7b42caa66372f8ad93 Mon Sep 17 00:00:00 2001
+From 75f8ebcfcad5c71bc66e48ab5b4fc07af091a0d4 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 20 Nov 2020 20:33:21 -0300
 Subject: [PATCH 5/9] init: Only set safetynet props if not eng build
@@ -9,10 +9,10 @@ Change-Id: I5c675e3391cc48a95ab9186047e9e9effca95406
  1 file changed, 9 insertions(+), 5 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index de93a682d..34be4c076 100644
+index 38fe8ef3a..75007e4ec 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -916,16 +916,20 @@ static const char *snet_prop_value[] = {
+@@ -927,16 +927,20 @@ static const char *snet_prop_value[] = {
  };
  
  static void workaround_snet_properties() {
@@ -39,5 +39,5 @@ index de93a682d..34be4c076 100644
      // Restore the normal property override security after safetynet props have been set
      weaken_prop_override_security = false;
 -- 
-2.50.0
+2.56.0
 

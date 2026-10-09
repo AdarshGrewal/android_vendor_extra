@@ -1,4 +1,4 @@
-From 879af2469af84d68cf1c9ea5575e1e3eaec7cf5f Mon Sep 17 00:00:00 2001
+From c7b74888901e90a214d616a16f0e6dff356615d3 Mon Sep 17 00:00:00 2001
 From: Danny Lin <danny@kdrag0n.dev>
 Date: Wed, 7 Oct 2020 00:24:54 -0700
 Subject: [PATCH 7/9] init: Check for fastbootd before spoofing safetynet props
@@ -17,10 +17,10 @@ Change-Id: I8795b16a90eea4e5a03f64a7a56478f01144256b
  1 file changed, 32 insertions(+), 6 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 7ec8e3fbf..3bab30233 100644
+index 26ba60166..8fad1ce52 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -873,6 +873,8 @@ static void load_override_properties() {
+@@ -884,6 +884,8 @@ static void load_override_properties() {
      }
  }
  
@@ -29,7 +29,7 @@ index 7ec8e3fbf..3bab30233 100644
  static const char *snet_prop_key[] = {
      "ro.boot.vbmeta.device_state",
      "ro.boot.verifiedbootstate",
-@@ -928,17 +930,41 @@ static const char *snet_prop_value[] = {
+@@ -939,17 +941,41 @@ static const char *snet_prop_value[] = {
  static void workaround_snet_properties() {
      std::string build_type = android::base::GetProperty("ro.build.type", "");
  
@@ -78,5 +78,5 @@ index 7ec8e3fbf..3bab30233 100644
  
      // Extra pops
 -- 
-2.50.0
+2.56.0
 

@@ -1,4 +1,4 @@
-From 98b3827dc17f0475192ea4e54b2cc4b69fe015af Mon Sep 17 00:00:00 2001
+From 2f7252bd6fbec22933f61b7148b520a93a296e67 Mon Sep 17 00:00:00 2001
 From: Park Ju Hyung <qkrwngud825@gmail.com>
 Date: Mon, 6 Nov 2017 20:30:39 +0900
 Subject: [PATCH 2/9] init: workaround SafetyNet check
@@ -12,10 +12,10 @@ Change-Id: I6ad755c085491c958c8a7d75db7df2c8e5481a55
  1 file changed, 47 insertions(+)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 710a9b800..e6405ec36 100644
+index fb6f211be..7efe4a46f 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -873,6 +873,50 @@ static void load_override_properties() {
+@@ -884,6 +884,50 @@ static void load_override_properties() {
      }
  }
  
@@ -66,7 +66,7 @@ index 710a9b800..e6405ec36 100644
  // If the ro.product.[brand|device|manufacturer|model|name] properties have not been explicitly
  // set, derive them from ro.product.${partition}.* properties
  static void property_initialize_ro_product_props() {
-@@ -1257,6 +1301,9 @@ void PropertyLoadBootDefaults() {
+@@ -1255,6 +1299,9 @@ void PropertyLoadBootDefaults() {
  
      update_sys_usb_config();
  
@@ -77,5 +77,5 @@ index 710a9b800..e6405ec36 100644
      weaken_prop_override_security = false;
  }
 -- 
-2.50.0
+2.56.0
 

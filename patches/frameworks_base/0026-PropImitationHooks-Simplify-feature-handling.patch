@@ -1,7 +1,7 @@
-From 45173a14d74aa177ee7a645a6cff60b8b7e0342f Mon Sep 17 00:00:00 2001
+From ea7851ced609d3c07481bc4e2ca2ce2646c0cd50 Mon Sep 17 00:00:00 2001
 From: AdarshGrewal <adarshgrewal@gmail.com>
 Date: Sat, 5 Sep 2026 11:42:28 +0530
-Subject: [PATCH 27/30] PropImitationHooks: Simplify feature handling
+Subject: [PATCH 26/30] PropImitationHooks: Simplify feature handling
 
 Change-Id: I0b50df7894b696a1f5dc4225bcb80f66e352874d
 ---
@@ -76,5 +76,5 @@ index 37d81dbab232..bbc6d757c1e8 100644
          return has;
      }
 -- 
-2.55.0
+2.56.0
 

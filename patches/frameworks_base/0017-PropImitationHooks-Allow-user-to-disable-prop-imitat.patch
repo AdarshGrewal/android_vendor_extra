@@ -1,7 +1,7 @@
-From d1c9625e0af8b986f1667a7fd3a331492a522a08 Mon Sep 17 00:00:00 2001
+From 908df5eebe6cb10f77c597f91c3c9ae8ba804b0e Mon Sep 17 00:00:00 2001
 From: Jyotiraditya Panda <jyotiraditya@aospa.co>
 Date: Wed, 7 Aug 2024 21:35:48 +0530
-Subject: [PATCH 18/30] PropImitationHooks: Allow user to disable prop
+Subject: [PATCH 17/30] PropImitationHooks: Allow user to disable prop
  imitation
 
  - Prevents spoofing props, bypassing task perms and blocking key attestation for GMS.
@@ -83,5 +83,5 @@ index 595afacb9457..adc69bc232ea 100644
          if (isCallerSafetyNet() || sIsFinsky) {
              dlog("Blocked key attestation sIsGms=" + sIsGms + " sIsFinsky=" + sIsFinsky);
 -- 
-2.55.0
+2.56.0
 

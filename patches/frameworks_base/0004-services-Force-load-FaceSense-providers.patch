@@ -1,4 +1,4 @@
-From 3991343ada845020e6fcf5da6eae57850df08193 Mon Sep 17 00:00:00 2001
+From 13657bd895b69e17c233059beb46b6bfbacc0a1f Mon Sep 17 00:00:00 2001
 From: Pranav Vashi <neobuddy89@gmail.com>
 Date: Mon, 14 Oct 2024 17:04:40 +0530
 Subject: [PATCH 04/30] services: Force load FaceSense providers
@@ -16,10 +16,10 @@ Signed-off-by: Pranav Vashi <neobuddy89@gmail.com>
  3 files changed, 8 insertions(+), 2 deletions(-)
 
 diff --git a/services/core/java/com/android/server/biometrics/AuthService.java b/services/core/java/com/android/server/biometrics/AuthService.java
-index 6670c21e5d38..5c3c4528f539 100644
+index 5314437f50d8..393b67e84620 100644
 --- a/services/core/java/com/android/server/biometrics/AuthService.java
 +++ b/services/core/java/com/android/server/biometrics/AuthService.java
-@@ -76,6 +76,7 @@ import com.android.internal.annotations.VisibleForTesting;
+@@ -78,6 +78,7 @@ import com.android.internal.annotations.VisibleForTesting;
  import com.android.internal.util.ArrayUtils;
  import com.android.server.SystemService;
  import com.android.server.biometrics.sensors.face.FaceService;
@@ -27,7 +27,7 @@ index 6670c21e5d38..5c3c4528f539 100644
  import com.android.server.biometrics.sensors.fingerprint.FingerprintService;
  import com.android.server.companion.virtual.VirtualDeviceManagerInternal;
  
-@@ -939,7 +940,8 @@ public class AuthService extends SystemService {
+@@ -1023,7 +1024,8 @@ public class AuthService extends SystemService {
              final String[] hidlConfigStrings, final Context context,
              final IFaceService faceService, final BiometricHandlerProvider handlerProvider) {
          if ((hidlConfigStrings == null || hidlConfigStrings.length == 0)
@@ -53,10 +53,10 @@ index 1d4e8b8c185e..32a22344abd1 100644
          final int currentUserId = mCurrentUserRetriever.get();
          final int nextUserId = mPendingOperations.getFirst().getTargetUserId();
 diff --git a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
-index 0fac4c57d39f..37573bf43af5 100644
+index ad1577abdd12..b3e576994a7c 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
-@@ -684,7 +684,7 @@ public class FaceService extends SystemService {
+@@ -683,7 +683,7 @@ public class FaceService extends SystemService {
                  FaceSensorConfigurations faceSensorConfigurations) {
              super.registerAuthenticators_enforcePermission();
  
@@ -66,5 +66,5 @@ index 0fac4c57d39f..37573bf43af5 100644
                  return;
              }
 -- 
-2.55.0
+2.56.0
 

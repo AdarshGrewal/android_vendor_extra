@@ -1,4 +1,4 @@
-From e1c4f0bf28726409d47b54739efd45c5b89e7558 Mon Sep 17 00:00:00 2001
+From 9d09a7c70c1b0f6c3c41ca9af25000e4d2b46833 Mon Sep 17 00:00:00 2001
 From: AdarshGrewal <adarshgrewal@gmail.com>
 Date: Wed, 20 Nov 2024 11:41:06 +0530
 Subject: [PATCH 10/30] SenseProvider: Align with lineage
@@ -9,7 +9,7 @@ Change-Id: Ie6e601e4c737db3f2c4a64742095abfea727160c
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java b/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java
-index c0a7aae053da..6573b9e7e88f 100644
+index c3433cdf1430..98c8bfa56a2e 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/face/sense/SenseProvider.java
 @@ -389,7 +389,7 @@ public class SenseProvider implements ServiceProvider {
@@ -22,5 +22,5 @@ index c0a7aae053da..6573b9e7e88f 100644
  
      private synchronized ISenseService getDaemon() {
 -- 
-2.55.0
+2.56.0
 

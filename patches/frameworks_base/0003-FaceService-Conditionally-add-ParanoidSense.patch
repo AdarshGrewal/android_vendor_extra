@@ -1,4 +1,4 @@
-From de442d6df205a41f8e21f4cb9ff4a2ef313ba13c Mon Sep 17 00:00:00 2001
+From 8ff4d861070b79658b068a4f11652468788fa13a Mon Sep 17 00:00:00 2001
 From: someone5678 <someone5678@users.noreply.github.com>
 Date: Mon, 8 Jan 2024 18:42:13 +0900
 Subject: [PATCH 03/30] FaceService: Conditionally add ParanoidSense
@@ -15,10 +15,10 @@ Change-Id: I7321580b87499f4020d3b080779e2f9cb1a6fce6
  1 file changed, 15 insertions(+), 16 deletions(-)
 
 diff --git a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
-index ab9b00af8b79..0fac4c57d39f 100644
+index ae25d4951744..ad1577abdd12 100644
 --- a/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
 +++ b/services/core/java/com/android/server/biometrics/sensors/face/FaceService.java
-@@ -665,19 +665,17 @@ public class FaceService extends SystemService {
+@@ -664,19 +664,17 @@ public class FaceService extends SystemService {
  
          private List<ServiceProvider> getSenseProviders() {
              final List<ServiceProvider> providers = new ArrayList<>();
@@ -49,7 +49,7 @@ index ab9b00af8b79..0fac4c57d39f 100644
              return providers;
          }
  
-@@ -696,13 +694,14 @@ public class FaceService extends SystemService {
+@@ -695,13 +693,14 @@ public class FaceService extends SystemService {
          private List<ServiceProvider> getProviders(
                  FaceSensorConfigurations faceSensorConfigurations) {
              final List<ServiceProvider> providers = new ArrayList<>();
@@ -68,5 +68,5 @@ index ab9b00af8b79..0fac4c57d39f 100644
          }
  
 -- 
-2.55.0
+2.56.0
 

@@ -1,4 +1,4 @@
-From ba7b18a2bf4126107644284218c18180785d4415 Mon Sep 17 00:00:00 2001
+From 680849758cabb1dc1c56e2757b534fc9bdac0a4a Mon Sep 17 00:00:00 2001
 From: Albert I <kras@raphielgang.org>
 Date: Fri, 29 Apr 2022 23:42:44 +0800
 Subject: [PATCH 9/9] init: Use `IsRecoveryMode()` for normal boot checks
@@ -17,10 +17,10 @@ Signed-off-by: Alexander Winkowski <dereference23@outlook.com>
  1 file changed, 1 insertion(+), 17 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 1d6fbd9c4..8443cc2ee 100644
+index c20d5e729..7d8f398a6 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -873,8 +873,6 @@ static void load_override_properties() {
+@@ -884,8 +884,6 @@ static void load_override_properties() {
      }
  }
  
@@ -29,7 +29,7 @@ index 1d6fbd9c4..8443cc2ee 100644
  static const char *snet_prop_key[] = {
      "ro.boot.vbmeta.device_state",
      "ro.boot.verifiedbootstate",
-@@ -934,24 +932,10 @@ static const char *snet_prop_value[] = {
+@@ -945,24 +943,10 @@ static const char *snet_prop_value[] = {
  static void workaround_snet_properties() {
      std::string build_type = android::base::GetProperty("ro.build.type", "");
  
@@ -56,5 +56,5 @@ index 1d6fbd9c4..8443cc2ee 100644
      }
  
 -- 
-2.50.0
+2.56.0
 

@@ -1,4 +1,4 @@
-From 18ea2d2acb4ec20c46dcad8e7ee367b1ae35b5c6 Mon Sep 17 00:00:00 2001
+From 515b47003a6c65d5a727a1016c2f9b0611731216 Mon Sep 17 00:00:00 2001
 From: Abhay Singh Gill <abhaygill017@gmail.com>
 Date: Sun, 5 Jan 2025 17:41:25 +0530
 Subject: [PATCH 4/4] Launcher3: Ditch workspace top/bottom padding for 6*5
@@ -78,5 +78,5 @@ index 2f421b78e3..0000000000
 -</device-paddings>
 \ No newline at end of file
 -- 
-2.52.0
+2.56.0
 

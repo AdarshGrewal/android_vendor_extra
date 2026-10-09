@@ -1,7 +1,7 @@
-From 2fa7b2c6f4b0a726d9de5bf9011bf2eb2583c96d Mon Sep 17 00:00:00 2001
+From 2d6c8fd384915142713eca9892f7b78f74181b1a Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Sat, 2 Dec 2023 23:43:18 +0530
-Subject: [PATCH 17/30] PIHooks: Get resources from context
+Subject: [PATCH 16/30] PIHooks: Get resources from context
 
 Allows updating overlays on the fly.
 
@@ -58,5 +58,5 @@ index 0d8b493da740..595afacb9457 100644
          sIsGms = packageName.equals(PACKAGE_GMS) && processName.equals(PROCESS_GMS_UNSTABLE);
          sIsFinsky = packageName.equals(PACKAGE_FINSKY);
 -- 
-2.55.0
+2.56.0
 

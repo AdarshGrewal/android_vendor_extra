@@ -1,4 +1,4 @@
-From 4371c23b13c9bfcbf6dafe777e90aa90ec34167b Mon Sep 17 00:00:00 2001
+From 132a339ccd47034423b2fbf9f813cf8c9ebd9df4 Mon Sep 17 00:00:00 2001
 From: Chris Renshaw <osm0sis@outlook.com>
 Date: Sat, 9 May 2020 06:53:32 -0300
 Subject: [PATCH 3/9] init: add vendor.* keys to spoof safetynet
@@ -11,10 +11,10 @@ Change-Id: Ib6ad1df4582a2f8333b0cbf650e79e947f6576d0
  1 file changed, 8 insertions(+)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index e6405ec36..bf386a8d9 100644
+index 7efe4a46f..3d8516c0d 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -887,6 +887,10 @@ static const char *snet_prop_key[] = {
+@@ -898,6 +898,10 @@ static const char *snet_prop_key[] = {
  	"ro.build.keys",
  	"ro.build.tags",
  	"ro.system.build.tags",
@@ -25,7 +25,7 @@ index e6405ec36..bf386a8d9 100644
  	NULL
  };
  
-@@ -904,6 +908,10 @@ static const char *snet_prop_value[] = {
+@@ -915,6 +919,10 @@ static const char *snet_prop_value[] = {
  	"release-keys", // ro.build.keys
  	"release-keys", // ro.build.tags
  	"release-keys", // ro.system.build.tags
@@ -37,5 +37,5 @@ index e6405ec36..bf386a8d9 100644
  };
  
 -- 
-2.50.0
+2.56.0
 

@@ -1,7 +1,7 @@
-From 8dcbbd4576dd02bff955516288dae1ab6262babb Mon Sep 17 00:00:00 2001
+From e0b5fe59840edc086c60062881b341cef1b2a71b Mon Sep 17 00:00:00 2001
 From: Abhay Singh Gill <abhaygill017@gmail.com>
-Date: Sat, 5 Sep 2026 15:17:27 +0530
-Subject: [PATCH 22/30] base: Add key generation for keybox spoofing [1/2]
+Date: Thu, 29 May 2025 03:59:29 +0530
+Subject: [PATCH 21/30] base: Add key generation for keybox spoofing [1/2]
 
 The code is used from :-
 https://github.com/5ec1cff/TrickyStore
@@ -19,12 +19,12 @@ Signed-off-by: Abhay Singh Gill <abhaygill017@gmail.com>
  .../util/{ => extra}/IKeyboxProvider.java     |   2 +-
  .../util/extra/KeyProviderManager.java        | 198 ++++++++
  .../util/extra/KeyboxChainGenerator.java      | 437 ++++++++++++++++++
- .../util/extra/KeyboxImitationHooks.java      | 172 +++++++
+ .../util/extra/KeyboxImitationHooks.java      | 177 +++++++
  .../internal/util/extra/KeyboxUtils.java      | 154 ++++++
  keystore/java/android/security/KeyStore2.java |  10 +-
- .../security/KeyStoreSecurityLevel.java       |  20 +
+ .../security/KeyStoreSecurityLevel.java       |  12 +
  .../validators/SecureSettingsValidators.java  |   1 +
- 12 files changed, 998 insertions(+), 319 deletions(-)
+ 12 files changed, 995 insertions(+), 319 deletions(-)
  delete mode 100644 core/java/com/android/internal/util/KeyProviderManager.java
  delete mode 100644 core/java/com/android/internal/util/KeyboxImitationHooks.java
  rename core/java/com/android/internal/util/{ => extra}/IKeyboxProvider.java (96%)
@@ -34,10 +34,10 @@ Signed-off-by: Abhay Singh Gill <abhaygill017@gmail.com>
  create mode 100644 core/java/com/android/internal/util/extra/KeyboxUtils.java
 
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index 36e2193cec11..10179e9f5f23 100644
+index 090c41d92bc7..9222991167f6 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -13334,6 +13334,13 @@ public final class Settings {
+@@ -13687,6 +13687,13 @@ public final class Settings {
          public static final String HBM_SETTING_KEY =
                  "com.android.server.display.HBM_SETTING_KEY";
  
@@ -1055,10 +1055,10 @@ index 000000000000..02940f1a7ca5
 +}
 diff --git a/core/java/com/android/internal/util/extra/KeyboxImitationHooks.java b/core/java/com/android/internal/util/extra/KeyboxImitationHooks.java
 new file mode 100644
-index 000000000000..518d179055af
+index 000000000000..83784a1e283f
 --- /dev/null
 +++ b/core/java/com/android/internal/util/extra/KeyboxImitationHooks.java
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,177 @@
 +/*
 + * SPDX-FileCopyrightText: 2024 Paranoid Android
 + * SPDX-FileCopyrightText: 2025 Neoteric OS
@@ -1119,6 +1119,11 @@ index 000000000000..518d179055af
 +        }
 +
 +        KeyGenParameters params = new KeyGenParameters(args.toArray(new KeyParameter[args.size()]));
++
++        if (params.attestationChallenge == null) {
++            return null;
++        }
++
 +        if (params.algorithm != Algorithm.EC && params.algorithm != Algorithm.RSA) {
 +            Log.w(TAG, "Unsupported algorithm: " + params.algorithm);
 +            return null;
@@ -1420,18 +1425,10 @@ index 5ddbfcc23878..5466b5ff27f2 100644
  
      /**
 diff --git a/keystore/java/android/security/KeyStoreSecurityLevel.java b/keystore/java/android/security/KeyStoreSecurityLevel.java
-index 6ab148a8b4ea..5f335a335d01 100644
+index f4f1de5b73c4..5683861ddd38 100644
 --- a/keystore/java/android/security/KeyStoreSecurityLevel.java
 +++ b/keystore/java/android/security/KeyStoreSecurityLevel.java
-@@ -19,6 +19,7 @@ package android.security;
- import android.annotation.NonNull;
- import android.app.compat.CompatChanges;
- import android.hardware.security.keymint.KeyParameter;
-+import android.hardware.security.keymint.Tag;
- import android.os.Binder;
- import android.os.RemoteException;
- import android.os.ServiceSpecificException;
-@@ -33,6 +34,8 @@ import android.system.keystore2.KeyMetadata;
+@@ -33,6 +33,8 @@ import android.system.keystore2.KeyMetadata;
  import android.system.keystore2.ResponseCode;
  import android.util.Log;
  
@@ -1440,20 +1437,13 @@ index 6ab148a8b4ea..5f335a335d01 100644
  import java.util.Calendar;
  import java.util.Collection;
  
-@@ -146,6 +149,23 @@ public class KeyStoreSecurityLevel {
+@@ -165,6 +167,16 @@ public class KeyStoreSecurityLevel {
+             Collection<KeyParameter> args, int flags, byte[] entropy)
              throws KeyStoreException {
          StrictMode.noteDiskWrite();
- 
-+        byte[] attestationChallenge = null;
-+        for (KeyParameter kp : args) {
-+            if (kp.tag == Tag.ATTESTATION_CHALLENGE) {
-+                attestationChallenge = kp.value.getBlob();
-+                break;
-+            }
-+        }
 +
 +        KeyboxImitationHooks.setSuccessFlag(false);
-+        if (attestationChallenge != null && attestationKey == null) {
++        if (attestationKey == null) {
 +            KeyMetadata metadata = KeyboxImitationHooks.generateKey(mSecurityLevel,
 +                    descriptor, args);
 +            if (metadata != null) {
@@ -1461,20 +1451,20 @@ index 6ab148a8b4ea..5f335a335d01 100644
 +            }
 +        }
 +
-         return handleExceptions(() -> mSecurityLevel.generateKey(
+         return retryBusyException(() -> mSecurityLevel.generateKey(
                  descriptor, attestationKey, args.toArray(new KeyParameter[args.size()]),
                  flags, entropy));
 diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
-index a7508c30f8c0..2e14ca580c58 100644
+index e31847d7717f..bc740d774ebc 100644
 --- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
 +++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
-@@ -521,5 +521,6 @@ public class SecureSettingsValidators {
-                 new InclusiveIntegerRangeValidator(0, 1));
-         VALIDATORS.put(Secure.IDENTITY_CHECK_NOTIFICATION_VIEW_DETAILS_CLICKED,
-                 new InclusiveIntegerRangeValidator(0, 1));
+@@ -553,5 +553,6 @@ public class SecureSettingsValidators {
+         VALIDATORS.put(Secure.IME_SWITCHER_BUTTON_IN_NAVBAR_ENABLED, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.RAISE_TRIGGER_DEFAULT_ASSISTANT,
+                 COLON_SEPARATED_COMPONENT_LIST_VALIDATOR);
 +        VALIDATORS.put(Secure.KEYBOX_DATA, ANY_STRING_VALIDATOR);
      }
  }
 -- 
-2.55.0
+2.56.0
 

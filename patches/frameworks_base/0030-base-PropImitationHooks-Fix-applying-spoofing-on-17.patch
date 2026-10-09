@@ -1,0 +1,89 @@
+From 2fc45fec76d9e152dd3d9bcc4804ca6881eae249 Mon Sep 17 00:00:00 2001
+From: John Galt <johngaltfirstrun@gmail.com>
+Date: Wed, 19 Aug 2026 08:59:56 -0400
+Subject: [PATCH 30/30] base: PropImitationHooks: Fix applying spoofing on 17
+
+By using theUnsafe
+
+Better than using hacks on android_art.
+[hridaya: Port over from PixelPropsUtils]
+
+Co-authored-by: Ido Ben-Hur <idoybh2@gmail.com>
+Change-Id: I86aa4c5b73729c4f005d113ad93b4dde052fe621
+Signed-off-by: hridaya <hridaya@pixelos.net>
+---
+ .../internal/util/PropImitationHooks.java     | 37 ++++++++++++++++++-
+ 1 file changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
+index 11155a92a6b1..91373d444ee2 100644
+--- a/core/java/com/android/internal/util/PropImitationHooks.java
++++ b/core/java/com/android/internal/util/PropImitationHooks.java
+@@ -40,6 +40,8 @@ import java.util.Locale;
+ import java.util.Map;
+ import java.util.Set;
+ 
++import sun.misc.Unsafe;
++
+ /**
+  * @hide
+  */
+@@ -73,6 +75,29 @@ public class PropImitationHooks {
+     private static volatile String sProcessName;
+     private static volatile boolean sIsGms, sIsFinsky, sIsPhotos, sPhotosSpoofEnabled = true;
+ 
++    private static final Field OFFSET_FIELD;
++    private static final Unsafe UNSAFE;
++
++    static {
++        Unsafe unsafe = null;
++        Field offsetField = null;
++
++        try {
++            Field field = Unsafe.class.getDeclaredField("theUnsafe");
++            field.setAccessible(true);
++            unsafe = (Unsafe) field.get(null);
++            field.setAccessible(false);
++
++            offsetField = Field.class.getDeclaredField("offset");
++            offsetField.setAccessible(true);
++        } catch (Exception e) {
++            Log.e(TAG, "Unable to initialize Unsafe", e);
++        }
++
++        UNSAFE = unsafe;
++        OFFSET_FIELD = offsetField;
++    }
++
+     public static void setProps(Context context) {
+         final String packageName = context.getPackageName();
+         final String processName = Application.getProcessName();
+@@ -108,6 +133,11 @@ public class PropImitationHooks {
+     }
+ 
+     private static void setPropValue(String key, String value) {
++        if (UNSAFE == null || OFFSET_FIELD == null) {
++            Log.e(TAG, "Unsafe is unavailable", new IllegalStateException());
++            return;
++        }
++
+         try {
+             dlog("Setting prop " + key + " to " + value);
+             Class clazz = Build.class;
+@@ -118,7 +148,12 @@ public class PropImitationHooks {
+             Field field = clazz.getDeclaredField(key);
+             field.setAccessible(true);
+             // Cast the value to int if it's an integer field, otherwise string.
+-            field.set(null, field.getType().equals(Integer.TYPE) ? Integer.parseInt(value) : value);
++            long offset = OFFSET_FIELD.getInt(field);
++            if (field.getType().equals(Integer.TYPE)) {
++                UNSAFE.putInt(field.getDeclaringClass(), offset, Integer.parseInt(value));
++            } else {
++                UNSAFE.putObject(field.getDeclaringClass(), offset, value);
++            }
+             field.setAccessible(false);
+         } catch (Exception e) {
+             Log.e(TAG, "Failed to set prop " + key, e);
+-- 
+2.56.0
+

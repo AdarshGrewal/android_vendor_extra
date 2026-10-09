@@ -1,4 +1,4 @@
-From f825db3a988c9af31038b33df2fcf3114e0dcff9 Mon Sep 17 00:00:00 2001
+From a5185b9fabe91e766d89d59996e357bd450c1ab6 Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhsv09@gmail.com>
 Date: Tue, 23 Aug 2022 17:11:54 -0300
 Subject: [PATCH 8/9] init: Spoof more props
@@ -9,10 +9,10 @@ Change-Id: Ic0ddbd6a0dd40c877248f7864082eddab2b32366
  1 file changed, 4 insertions(+)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 3bab30233..1d6fbd9c4 100644
+index 8fad1ce52..c20d5e729 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -885,10 +885,12 @@ static const char *snet_prop_key[] = {
+@@ -896,10 +896,12 @@ static const char *snet_prop_key[] = {
      "ro.warranty_bit",
      "ro.debuggable",
      "ro.secure",
@@ -25,7 +25,7 @@ index 3bab30233..1d6fbd9c4 100644
      "ro.product.build.type",
      "ro.odm.build.type",
      "ro.build.keys",
-@@ -911,10 +913,12 @@ static const char *snet_prop_value[] = {
+@@ -922,10 +924,12 @@ static const char *snet_prop_value[] = {
      "0", // ro.warranty_bit
      "0", // ro.debuggable
      "1", // ro.secure
@@ -39,5 +39,5 @@ index 3bab30233..1d6fbd9c4 100644
      "user", // ro.odm.build.type
      "release-keys", // ro.build.keys
 -- 
-2.50.0
+2.56.0
 

@@ -1,4 +1,4 @@
-From 078505bdbecc2b27f96946d3cd155d4f9f18862f Mon Sep 17 00:00:00 2001
+From c07b96326057643164a8fd66ea0faba371f7b9bd Mon Sep 17 00:00:00 2001
 From: elpaablo <donopwhile1@gmail.com>
 Date: Tue, 21 Nov 2023 15:42:03 +0000
 Subject: [PATCH 2/4] Launcher3: Restore 4x4 workspace
@@ -81,7 +81,7 @@ index 0000000000..d2a08527d2
 +
 +</favorites>
 diff --git a/res/xml/device_profiles.xml b/res/xml/device_profiles.xml
-index 4a7de5bb71..b2c1c2364e 100644
+index 73cc4ebe2b..e1527f9cca 100644
 --- a/res/xml/device_profiles.xml
 +++ b/res/xml/device_profiles.xml
 @@ -93,6 +93,71 @@
@@ -157,5 +157,5 @@ index 4a7de5bb71..b2c1c2364e 100644
          launcher:name="4_by_5"
          launcher:numRows="5"
 -- 
-2.52.0
+2.56.0
 

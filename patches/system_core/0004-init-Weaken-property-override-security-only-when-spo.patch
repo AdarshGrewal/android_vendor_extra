@@ -1,4 +1,4 @@
-From 93b570f0fdc7df8d8158ce4bbe542590afe1e575 Mon Sep 17 00:00:00 2001
+From cfc4664c97552e4e6ed7f7e0428f79c0d54af35c Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhenrique09.mcz@hotmail.com>
 Date: Fri, 20 Nov 2020 11:34:54 -0300
 Subject: [PATCH 4/9] init: Weaken property override security only when
@@ -10,10 +10,10 @@ Change-Id: I1664b3b3fa0fc87bda683d53a56645f6d974ce01
  1 file changed, 6 insertions(+), 6 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index bf386a8d9..de93a682d 100644
+index 3d8516c0d..38fe8ef3a 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -916,6 +916,9 @@ static const char *snet_prop_value[] = {
+@@ -927,6 +927,9 @@ static const char *snet_prop_value[] = {
  };
  
  static void workaround_snet_properties() {
@@ -23,7 +23,7 @@ index bf386a8d9..de93a682d 100644
  	std::string error;
  	LOG(INFO) << "snet: Hiding sensitive props";
  
-@@ -923,6 +926,9 @@ static void workaround_snet_properties() {
+@@ -934,6 +937,9 @@ static void workaround_snet_properties() {
  	for (int i = 0; snet_prop_key[i]; ++i) {
  		PropertySetNoSocket(snet_prop_key[i], snet_prop_value[i], &error);
  	}
@@ -43,7 +43,7 @@ index bf386a8d9..de93a682d 100644
      // Update with vendor-specific property runtime overrides
      vendor_load_properties();
  
-@@ -1311,9 +1314,6 @@ void PropertyLoadBootDefaults() {
+@@ -1309,9 +1312,6 @@ void PropertyLoadBootDefaults() {
  
      // Workaround SafetyNet
      workaround_snet_properties();
@@ -54,5 +54,5 @@ index bf386a8d9..de93a682d 100644
  
  void PropertyLoadDerivedDefaults() {
 -- 
-2.50.0
+2.56.0
 

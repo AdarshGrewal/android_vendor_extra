@@ -1,7 +1,7 @@
-From 9cfc27045ef9d2e90cab30ca0809e2568a36af37 Mon Sep 17 00:00:00 2001
+From 6f92f471879c38c7a5ef4c91d1886002ecc30d1a Mon Sep 17 00:00:00 2001
 From: Akash Srivastava <akashniki@gmail.com>
 Date: Mon, 8 Sep 2025 17:56:26 +0200
-Subject: [PATCH 24/30] PropImitationHooks: Skip play Integrity props in
+Subject: [PATCH 23/30] PropImitationHooks: Skip play Integrity props in
  isolated processes
 
 * Isolated processes (e.g. com.android.vending:com.google.android.finsky.verifier.apkanalysis.service.ApkContentsScanService) cannot access content providers. Calling Settings.Secure.getString(...) during their application init triggers:
@@ -62,5 +62,5 @@ index 619428e11d8d..5def07d3d251 100644
              dlog("Certified props are not set");
              return;
 -- 
-2.55.0
+2.56.0
 

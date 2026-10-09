@@ -1,4 +1,4 @@
-From 34f59fc94a86d14e5feb100683e5b56b94382e3a Mon Sep 17 00:00:00 2001
+From cd726cc48a01c340e64c4ba6f38fad84c8921616 Mon Sep 17 00:00:00 2001
 From: someone5678 <someone5678@users.noreply.github.com>
 Date: Wed, 5 Jun 2024 20:19:29 +0900
 Subject: [PATCH 2/2] Settings: Forcefully enable Hotspot Speed setting
@@ -15,10 +15,10 @@ Signed-off-by: Saikrishna1504 <saikrishna26918@gmail.com>
  2 files changed, 2 insertions(+), 63 deletions(-)
 
 diff --git a/src/com/android/settings/wifi/repository/WifiHotspotRepository.java b/src/com/android/settings/wifi/repository/WifiHotspotRepository.java
-index 18b4bb59d6f..4f8f99dfd13 100644
+index ed6f59c218a..275670216a9 100644
 --- a/src/com/android/settings/wifi/repository/WifiHotspotRepository.java
 +++ b/src/com/android/settings/wifi/repository/WifiHotspotRepository.java
-@@ -104,7 +104,6 @@ public class WifiHotspotRepository {
+@@ -95,7 +95,6 @@ public class WifiHotspotRepository {
      protected Boolean mIs6gBandSupported;
      protected SapBand mBand6g = new SapBand(WifiScanner.WIFI_BAND_6_GHZ);
      protected MutableLiveData<Boolean> m6gAvailable;
@@ -26,7 +26,7 @@ index 18b4bb59d6f..4f8f99dfd13 100644
  
      @VisibleForTesting
      Boolean mIsConfigShowSpeed;
-@@ -205,25 +204,11 @@ public class WifiHotspotRepository {
+@@ -197,25 +196,11 @@ public class WifiHotspotRepository {
          updateSpeedType();
      }
  
@@ -52,7 +52,7 @@ index 18b4bb59d6f..4f8f99dfd13 100644
              mSecurityType = new MutableLiveData<>();
              updateSecurityType();
              log("getSecurityType():" + mSecurityType.getValue());
-@@ -276,7 +261,6 @@ public class WifiHotspotRepository {
+@@ -268,7 +253,6 @@ public class WifiHotspotRepository {
       */
      public LiveData<Integer> getSpeedType() {
          if (mSpeedType == null) {
@@ -60,7 +60,7 @@ index 18b4bb59d6f..4f8f99dfd13 100644
              mSpeedType = new MutableLiveData<>();
              updateSpeedType();
              log("getSpeedType():" + mSpeedType.getValue());
-@@ -398,10 +382,7 @@ public class WifiHotspotRepository {
+@@ -449,10 +433,7 @@ public class WifiHotspotRepository {
       * @return {@code true} if Wi-Fi Hotspot 5 GHz Band is available
       */
      public boolean is5gAvailable() {
@@ -72,7 +72,7 @@ index 18b4bb59d6f..4f8f99dfd13 100644
      }
  
      /**
-@@ -440,10 +421,7 @@ public class WifiHotspotRepository {
+@@ -491,10 +472,7 @@ public class WifiHotspotRepository {
       * @return {@code true} if Wi-Fi Hotspot 6 GHz Band is available
       */
      public boolean is6gAvailable() {
@@ -84,7 +84,7 @@ index 18b4bb59d6f..4f8f99dfd13 100644
      }
  
      /**
-@@ -531,44 +509,6 @@ public class WifiHotspotRepository {
+@@ -598,44 +576,6 @@ public class WifiHotspotRepository {
          return true;
      }
  
@@ -130,17 +130,17 @@ index 18b4bb59d6f..4f8f99dfd13 100644
       * Return whether Wi-Fi Hotspot is restarting or not.
       *
 diff --git a/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java b/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java
-index ddf8d3fa89d..d750014dfb4 100644
+index fdf364a978e..a118b22b31e 100644
 --- a/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java
 +++ b/src/com/android/settings/wifi/tether/WifiHotspotSpeedViewModel.java
-@@ -70,7 +70,6 @@ public class WifiHotspotSpeedViewModel extends AndroidViewModel {
+@@ -73,7 +73,6 @@ public class WifiHotspotSpeedViewModel extends AndroidViewModel {
          mWifiHotspotRepository.get6gAvailable().observeForever(m6gAvailableObserver);
          mWifiHotspotRepository.get5gAvailable().observeForever(m5gAvailableObserver);
          mWifiHotspotRepository.getSpeedType().observeForever(mSpeedTypeObserver);
 -        mWifiHotspotRepository.setAutoRefresh(true);
+     }
  
-         // The visibility of the 6 GHz speed option will not change on a Pixel device.
-         mSpeedInfo6g.mIsVisible = mWifiHotspotRepository.is6GHzBandSupported();
+     @Override
 -- 
-2.55.0
+2.56.0
 

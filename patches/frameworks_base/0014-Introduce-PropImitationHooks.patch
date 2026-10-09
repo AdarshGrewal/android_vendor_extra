@@ -1,7 +1,7 @@
-From 9b2387e41402e8527fe33c869648f92b249571f1 Mon Sep 17 00:00:00 2001
+From 4b6d19688069da1ee44d2fc46b78a57cb37efdb3 Mon Sep 17 00:00:00 2001
 From: Omkar Chandorkar <gotenksIN@aospa.co>
 Date: Thu, 1 Sep 2022 17:18:58 +0530
-Subject: [PATCH 15/30] Introduce PropImitationHooks
+Subject: [PATCH 14/30] Introduce PropImitationHooks
 
 This is a squash of the following commits.
 
@@ -129,7 +129,7 @@ Change-Id: I7844dc9ac8e2f927e6bb565ee218210b194e6ef0
  create mode 100644 core/res/res/values/extra_symbols.xml
 
 diff --git a/core/java/android/app/Instrumentation.java b/core/java/android/app/Instrumentation.java
-index 9938a19b498a..b71d908d37ff 100644
+index 7402ca5cfa10..586a8ccca2b1 100644
 --- a/core/java/android/app/Instrumentation.java
 +++ b/core/java/android/app/Instrumentation.java
 @@ -70,6 +70,7 @@ import android.view.Window;
@@ -140,7 +140,7 @@ index 9938a19b498a..b71d908d37ff 100644
  
  import java.io.File;
  import java.lang.annotation.Retention;
-@@ -1359,6 +1360,7 @@ public class Instrumentation {
+@@ -1361,6 +1362,7 @@ public class Instrumentation {
          Application app = getFactory(context.getPackageName())
                  .instantiateApplication(cl, className);
          app.attach(context);
@@ -148,7 +148,7 @@ index 9938a19b498a..b71d908d37ff 100644
          return app;
      }
      
-@@ -1377,6 +1379,7 @@ public class Instrumentation {
+@@ -1379,6 +1381,7 @@ public class Instrumentation {
              ClassNotFoundException {
          Application app = (Application)clazz.newInstance();
          app.attach(context);
@@ -380,7 +380,7 @@ index 000000000000..17a6c06a6136
 +    <java-symbol type="string" name="config_netflixSpoofModel" />
 +</resources>
 diff --git a/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java b/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java
-index e6a63b9c4c17..81ca30ea8676 100644
+index 3694e59b034a..ccafc95b473c 100644
 --- a/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java
 +++ b/keystore/java/android/security/keystore2/AndroidKeyStoreSpi.java
 @@ -48,6 +48,7 @@ import android.system.keystore2.ResponseCode;
@@ -391,7 +391,7 @@ index e6a63b9c4c17..81ca30ea8676 100644
  
  import java.io.ByteArrayInputStream;
  import java.io.IOException;
-@@ -178,6 +179,8 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
+@@ -181,6 +182,8 @@ public class AndroidKeyStoreSpi extends KeyStoreSpi {
  
      @Override
      public Certificate[] engineGetCertificateChain(String alias) {
@@ -401,10 +401,10 @@ index e6a63b9c4c17..81ca30ea8676 100644
  
          if (response == null || response.metadata.certificate == null) {
 diff --git a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
-index 7e0b56ce9a4f..faeb02098856 100644
+index 6cc67150ff2e..23d58dbeffd8 100644
 --- a/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
 +++ b/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
-@@ -276,6 +276,7 @@ import com.android.internal.protolog.ProtoLog;
+@@ -278,6 +278,7 @@ import com.android.internal.protolog.ProtoLog;
  import com.android.internal.util.ArrayUtils;
  import com.android.internal.util.FastPrintWriter;
  import com.android.internal.util.FrameworkStatsLog;
@@ -412,7 +412,7 @@ index 7e0b56ce9a4f..faeb02098856 100644
  import com.android.internal.util.function.pooled.PooledLambda;
  import com.android.server.LocalManagerRegistry;
  import com.android.server.LocalServices;
-@@ -2072,7 +2073,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+@@ -2167,7 +2168,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
  
      @Override
      public RootTaskInfo getFocusedRootTaskInfo() throws RemoteException {
@@ -423,7 +423,7 @@ index 7e0b56ce9a4f..faeb02098856 100644
          final long ident = Binder.clearCallingIdentity();
          try {
              synchronized (mGlobalLock) {
-@@ -3383,7 +3386,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
+@@ -3522,7 +3525,9 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
      /** Sets the task stack listener that gets callbacks when a task stack changes. */
      @Override
      public void registerTaskStackListener(ITaskStackListener listener) {
@@ -435,5 +435,5 @@ index 7e0b56ce9a4f..faeb02098856 100644
      }
  
 -- 
-2.55.0
+2.56.0
 

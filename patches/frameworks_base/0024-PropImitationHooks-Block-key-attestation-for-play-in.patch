@@ -1,7 +1,7 @@
-From fd445aab1d07a1853b1151e7aa7c312226e69265 Mon Sep 17 00:00:00 2001
+From 05d09141dbcf5613e928c2e42dadedd0c8456b47 Mon Sep 17 00:00:00 2001
 From: Abhay Singh Gill <abhaygill017@gmail.com>
 Date: Tue, 16 Sep 2025 15:06:21 +0530
-Subject: [PATCH 25/30] PropImitationHooks: Block key attestation for play
+Subject: [PATCH 24/30] PropImitationHooks: Block key attestation for play
  integrity
 
 Change-Id: I3d9f9e04fc08c5b212309263aae55296bb98920f
@@ -50,5 +50,5 @@ index 5def07d3d251..5d269e9b5e01 100644
          }
      }
 -- 
-2.55.0
+2.56.0
 

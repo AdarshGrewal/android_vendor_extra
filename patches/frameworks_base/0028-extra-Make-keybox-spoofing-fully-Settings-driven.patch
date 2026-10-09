@@ -1,7 +1,7 @@
-From b988f653e222f42ee986f23a441f810ee8a32859 Mon Sep 17 00:00:00 2001
+From bb9213e4a5df5133ca32df4cc3ad4b8fbe573454 Mon Sep 17 00:00:00 2001
 From: AdarshGrewal <adarshgrewal@gmail.com>
 Date: Sat, 5 Sep 2026 16:00:25 +0530
-Subject: [PATCH 29/30] extra: Make keybox spoofing fully Settings-driven
+Subject: [PATCH 28/30] extra: Make keybox spoofing fully Settings-driven
 
 Change-Id: I7a4e2c8f1b5d90e6c3a8f4b2d9e1c5a7b3f6d0e2a
 ---
@@ -16,10 +16,10 @@ Change-Id: I7a4e2c8f1b5d90e6c3a8f4b2d9e1c5a7b3f6d0e2a
  delete mode 100644 core/res/res/values/extra_symbols.xml
 
 diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
-index b577379128ae..7ecbf3d4e39b 100644
+index 27809697ffe9..1ade05088778 100644
 --- a/core/java/android/provider/Settings.java
 +++ b/core/java/android/provider/Settings.java
-@@ -13348,6 +13348,13 @@ public final class Settings {
+@@ -13701,6 +13701,13 @@ public final class Settings {
          @Readable
          public static final String CERTIFIED_PROPS_DATA = "certified_props_data";
  
@@ -34,7 +34,7 @@ index b577379128ae..7ecbf3d4e39b 100644
           * Master switch for build-property spoofing.
           * @hide
 diff --git a/core/java/com/android/internal/util/PropImitationHooks.java b/core/java/com/android/internal/util/PropImitationHooks.java
-index 511823f41538..ef4c9b5d6bbf 100644
+index 97d60dcb4c4f..9ae564f281dc 100644
 --- a/core/java/com/android/internal/util/PropImitationHooks.java
 +++ b/core/java/com/android/internal/util/PropImitationHooks.java
 @@ -26,7 +26,6 @@ import android.content.Context;
@@ -45,7 +45,7 @@ index 511823f41538..ef4c9b5d6bbf 100644
  import android.text.TextUtils;
  import android.util.Log;
  
-@@ -47,9 +46,6 @@ public class PropImitationHooks {
+@@ -48,9 +47,6 @@ public class PropImitationHooks {
      private static final String TAG = "PropImitationHooks";
      private static final boolean DEBUG = Log.isLoggable(TAG, Log.DEBUG);
  
@@ -55,7 +55,7 @@ index 511823f41538..ef4c9b5d6bbf 100644
      private static final String PACKAGE_FINSKY = "com.android.vending";
      private static final String PACKAGE_GMS = "com.google.android.gms";
      private static final String PROCESS_GMS_UNSTABLE = PACKAGE_GMS + ".unstable";
-@@ -200,8 +196,9 @@ public class PropImitationHooks {
+@@ -201,8 +197,9 @@ public class PropImitationHooks {
      }
  
      public static void onEngineGetCertificateChain() {
@@ -199,11 +199,11 @@ index c911c0d86a3e..000000000000
 -    <java-symbol type="array" name="config_certifiedKeybox" />
 -</resources>
 diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
-index 101543f5bd0c..263027eac802 100644
+index eb91d59dec2e..be77ec358cf6 100644
 --- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
 +++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
-@@ -523,6 +523,7 @@ public class SecureSettingsValidators {
-                 new InclusiveIntegerRangeValidator(0, 1));
+@@ -555,6 +555,7 @@ public class SecureSettingsValidators {
+                 COLON_SEPARATED_COMPONENT_LIST_VALIDATOR);
          VALIDATORS.put(Secure.KEYBOX_DATA, ANY_STRING_VALIDATOR);
          VALIDATORS.put(Secure.CERTIFIED_PROPS_DATA, ANY_STRING_VALIDATOR);
 +        VALIDATORS.put(Secure.SPOOF_KEYBOX, BOOLEAN_VALIDATOR);
@@ -211,5 +211,5 @@ index 101543f5bd0c..263027eac802 100644
      }
  }
 -- 
-2.55.0
+2.56.0
 

@@ -1,7 +1,7 @@
-From 89c6de54379edcff550ce1045731a3e2040f089b Mon Sep 17 00:00:00 2001
+From ac8cea42ca828210c4aa36ffafa19c6c4f2b1781 Mon Sep 17 00:00:00 2001
 From: AdarshGrewal <adarshgrewal@gmail.com>
 Date: Sat, 5 Sep 2026 11:30:25 +0530
-Subject: [PATCH 26/30] PropImitationHooks: Remove arcore and netflix spoof
+Subject: [PATCH 25/30] PropImitationHooks: Remove arcore and netflix spoof
 
 Change-Id: Id55dce0fe633aac9e1408effb050c2f37a9112f9
 ---
@@ -104,5 +104,5 @@ index 80e350ec8bc6..c82a4f8cdce9 100644
 -    <java-symbol type="string" name="config_netflixSpoofModel" />
  </resources>
 -- 
-2.55.0
+2.56.0
 

@@ -1,7 +1,7 @@
-From f0ad5395b7d2c58717bca6ec8683c54b6c28555e Mon Sep 17 00:00:00 2001
+From a2b636956eb753cc09e0eaac78ae0352c81fa23d Mon Sep 17 00:00:00 2001
 From: Adithya R <gh0strider.2k18.reborn@gmail.com>
 Date: Sun, 1 Sep 2024 09:46:29 +0530
-Subject: [PATCH 19/30] PropImitationHooks: Make it a hidden API
+Subject: [PATCH 18/30] PropImitationHooks: Make it a hidden API
 
 Change-Id: I271bc644444581565847d56766ca85bc7d272436
 ---
@@ -23,5 +23,5 @@ index adc69bc232ea..2229b899fa52 100644
  
      private static final String TAG = "PropImitationHooks";
 -- 
-2.55.0
+2.56.0
 

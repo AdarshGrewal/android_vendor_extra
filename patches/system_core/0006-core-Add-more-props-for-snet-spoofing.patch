@@ -1,4 +1,4 @@
-From 119364705119c5594733a70e9c74db5737d399bc Mon Sep 17 00:00:00 2001
+From 08c94d729d29636a96c060e52c5181fb0209625a Mon Sep 17 00:00:00 2001
 From: jhenrique09 <jhsv09@gmail.com>
 Date: Sat, 19 Mar 2022 19:40:40 +0000
 Subject: [PATCH 6/9] core: Add more props for snet spoofing
@@ -11,10 +11,10 @@ Change-Id: I4c0bcb61fea5a7b051c3a770d34a3a09f17db1c4
  1 file changed, 57 insertions(+), 41 deletions(-)
 
 diff --git a/init/property_service.cpp b/init/property_service.cpp
-index 34be4c076..7ec8e3fbf 100644
+index 75007e4ec..26ba60166 100644
 --- a/init/property_service.cpp
 +++ b/init/property_service.cpp
-@@ -874,45 +874,55 @@ static void load_override_properties() {
+@@ -885,45 +885,55 @@ static void load_override_properties() {
  }
  
  static const char *snet_prop_key[] = {
@@ -106,7 +106,7 @@ index 34be4c076..7ec8e3fbf 100644
  };
  
  static void workaround_snet_properties() {
-@@ -921,16 +931,22 @@ static void workaround_snet_properties() {
+@@ -932,16 +942,22 @@ static void workaround_snet_properties() {
      // Weaken property override security to set safetynet props
      weaken_prop_override_security = true;
  
@@ -135,5 +135,5 @@ index 34be4c076..7ec8e3fbf 100644
      weaken_prop_override_security = false;
  }
 -- 
-2.50.0
+2.56.0
 

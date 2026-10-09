@@ -1,7 +1,7 @@
-From 6d2ef8f88d838112f3a28862db2e060a435f8caa Mon Sep 17 00:00:00 2001
+From 82fdfd887191ecf81476d00cf6caa98a7cab081e Mon Sep 17 00:00:00 2001
 From: Ghosuto <clash.raja10@gmail.com>
 Date: Fri, 8 Aug 2025 23:56:21 +0530
-Subject: [PATCH 23/30] PropImitationHooks: Spoof certified props to finsky as
+Subject: [PATCH 22/30] PropImitationHooks: Spoof certified props to finsky as
  well
 
 To fixup play integrity spoof.
@@ -50,5 +50,5 @@ index b025cfc58ff7..619428e11d8d 100644
          try {
              ActivityTaskManager.getService().registerTaskStackListener(taskStackListener);
 -- 
-2.55.0
+2.56.0
 
