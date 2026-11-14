@@ -1,0 +1,2149 @@
+From 4460a78350b10dcb638fb563d666f745be929381 Mon Sep 17 00:00:00 2001
+From: Loukious <24696530+Loukious@users.noreply.github.com>
+Date: Sat, 14 Nov 2026 23:23:49 +0100
+Subject: [PATCH] display: Port Onyx stock auto-brightness
+
+Use Xiaomi Global user-point smoothing so an Auto slider preference can
+retain its anchor without flattening the rest of the brightness curve.
+
+Add the default-off Onyx sensor policy, cached on-change ALS initialization,
+linear physical mapping and stock ramp equations. Dispose replaced
+controllers and stale mappers during display reload. Retain Android output
+limits, model lifecycle, white balance and Reduce Bright Colors ordering.
+
+Requires the companion Onyx resource opt-in and corrected panel XMLs.
+---
+ core/res/res/values/config.xml                |   3 +
+ core/res/res/values/symbols.xml               |   1 +
+ .../AutomaticBrightnessController.java        | 107 +++-
+ .../display/BrightnessMappingStrategy.java    | 117 +++-
+ .../server/display/DisplayDeviceConfig.java   |   4 +
+ .../display/DisplayPowerController.java       | 107 +++-
+ .../display/OnyxBrightnessRampController.java | 342 ++++++++++++
+ .../display/OnyxBrightnessSensorPolicy.java   | 387 ++++++++++++++
+ .../android/server/display/OnyxLuxPolicy.java | 499 ++++++++++++++++++
+ .../android/server/display/RampAnimator.java  | 148 +++++-
+ 10 files changed, 1693 insertions(+), 22 deletions(-)
+ create mode 100644 services/core/java/com/android/server/display/OnyxBrightnessRampController.java
+ create mode 100644 services/core/java/com/android/server/display/OnyxBrightnessSensorPolicy.java
+ create mode 100644 services/core/java/com/android/server/display/OnyxLuxPolicy.java
+
+diff --git a/core/res/res/values/config.xml b/core/res/res/values/config.xml
+index a19202ff1..a7fb0b534 100644
+--- a/core/res/res/values/config.xml
++++ b/core/res/res/values/config.xml
+@@ -501,6 +501,9 @@
+          Software implementation will be used if config_hardware_auto_brightness_available is not set -->
+     <bool name="config_automatic_brightness_available">false</bool>
+ 
++    <!-- Opt in to the Onyx stock sensor, mapping and transition policy. -->
++    <bool name="config_enableOnyxAutoBrightness">false</bool>
++
+     <!-- Flag indicating whether we should enable the adaptive sleep.-->
+     <bool name="config_adaptive_sleep_available">false</bool>
+ 
+diff --git a/core/res/res/values/symbols.xml b/core/res/res/values/symbols.xml
+index f20a2b6a0..cffd0b735 100644
+--- a/core/res/res/values/symbols.xml
++++ b/core/res/res/values/symbols.xml
+@@ -2132,6 +2132,7 @@
+   <java-symbol type="bool" name="config_camera_autorotate"/>
+   <java-symbol type="bool" name="config_animateScreenLights" />
+   <java-symbol type="bool" name="config_automatic_brightness_available" />
++  <java-symbol type="bool" name="config_enableOnyxAutoBrightness" />
+   <java-symbol type="bool" name="config_smart_battery_available" />
+   <java-symbol type="bool" name="config_autoBrightnessResetAmbientLuxAfterWarmUp" />
+   <java-symbol type="bool" name="config_notificationHeaderClickableForExpand" />
+diff --git a/services/core/java/com/android/server/display/AutomaticBrightnessController.java b/services/core/java/com/android/server/display/AutomaticBrightnessController.java
+index 858299ba2..585e1fbec 100644
+--- a/services/core/java/com/android/server/display/AutomaticBrightnessController.java
++++ b/services/core/java/com/android/server/display/AutomaticBrightnessController.java
+@@ -292,6 +292,42 @@ public class AutomaticBrightnessController {
+ 
+     private boolean mAutoBrightnessOneShot;
+ 
++    // Installed by the display controller only on devices with the Onyx policy overlay.
++    private OnyxBrightnessSensorPolicy mOnyxBrightnessSensorPolicy;
++
++    void setOnyxBrightnessSensorPolicy(OnyxBrightnessSensorPolicy.Config config) {
++        if (mOnyxBrightnessSensorPolicy != null) mOnyxBrightnessSensorPolicy.stop();
++        mOnyxBrightnessSensorPolicy = null;
++        if (config == null || !config.enabled) return;
++        mOnyxBrightnessSensorPolicy = new OnyxBrightnessSensorPolicy(mContext, mSensorManager,
++                mHandler, mClock, config, (lux, fastLux, slowLux, fastChange) -> {
++                    mPreThresholdLux = mAmbientLuxValid ? mAmbientLux : INVALID_LUX;
++                    mFastAmbientLux = fastLux;
++                    mSlowAmbientLux = slowLux;
++                    setAmbientLux(lux);
++                    mAmbientLuxValid = true;
++                    updateAutoBrightness(true /* sendUpdate */, false /* isManuallySet */);
++                }, mAmbientLightHorizonLong, mAmbientLightHorizonShort,
++                mLightSensorWarmUpTimeConfig, mNormalLightSensorRate,
++                mBrighteningLightDebounceConfig, mDarkeningLightDebounceConfig);
++        mHandler.removeMessages(MSG_UPDATE_AMBIENT_LUX);
++        mOnyxBrightnessSensorPolicy.setEnabled(mLightSensorEnabled
++                && (!mAutoBrightnessOneShot || !mAmbientLuxValid));
++    }
++
++    /** Fast response during first auto brightness, pocket exit or a large light increase. */
++    boolean shouldUseOnyxFastRate() {
++        return mOnyxBrightnessSensorPolicy != null
++                && mOnyxBrightnessSensorPolicy.shouldUseFastRate();
++    }
++
++    boolean shouldUseOnyxFastRate(float currentBrightness, float targetBrightness) {
++        return mOnyxBrightnessSensorPolicy != null
++                && mOnyxBrightnessSensorPolicy.shouldUseFastRate(
++                        mCurrentBrightnessMapper.convertToNits(currentBrightness),
++                        mCurrentBrightnessMapper.convertToNits(targetBrightness));
++    }
++
+     AutomaticBrightnessController(Callbacks callbacks, Looper looper,
+             SensorManager sensorManager, Sensor lightSensor,
+             SparseArray<BrightnessMappingStrategy> brightnessMappingStrategyMap,
+@@ -461,7 +497,9 @@ public class AutomaticBrightnessController {
+             boolean userChangedAutoBrightnessAdjustment, int displayPolicy, int displayState,
+             boolean useNormalBrightnessForDoze, boolean shouldResetShortTermModel,
+             boolean autoBrightnessOneShot) {
++        final int previousState = mState;
+         mState = state;
++        if (mOnyxBrightnessSensorPolicy != null) handleSettingsChange(autoBrightnessOneShot);
+         boolean changed = setBrightnessConfiguration(configuration, shouldResetShortTermModel);
+         changed |= setDisplayPolicy(displayPolicy);
+         mDisplayState = displayState;
+@@ -480,7 +518,7 @@ public class AutomaticBrightnessController {
+         if (userInitiatedChange && enable) {
+             prepareBrightnessAdjustmentSample();
+         }
+-        changed |= setLightSensorEnabled(enable);
++        changed |= setLightSensorEnabled(enable, previousState == AUTO_BRIGHTNESS_DISABLED);
+ 
+         boolean isBrightnessThrottled = mBrightnessClamperController.isThrottled();
+         if (mIsBrightnessThrottled != isBrightnessThrottled) {
+@@ -498,6 +536,7 @@ public class AutomaticBrightnessController {
+ 
+     public void stop() {
+         setLightSensorEnabled(false);
++        if (mOnyxBrightnessSensorPolicy != null) mOnyxBrightnessSensorPolicy.stop();
+     }
+ 
+     public boolean hasUserDataPoints() {
+@@ -546,9 +585,23 @@ public class AutomaticBrightnessController {
+     }
+ 
+     private void handleSettingsChange(boolean autoBrightnessOneShot) {
++        if (mOnyxBrightnessSensorPolicy != null) {
++            if (mState == AUTO_BRIGHTNESS_ENABLED && mLightSensorEnabled
++                    && mAutoBrightnessOneShot && !autoBrightnessOneShot) {
++                mOnyxBrightnessSensorPolicy.setEnabled(true);
++                registerLightSensor();
++            } else if (mLightSensorEnabled && !mAutoBrightnessOneShot
++                    && autoBrightnessOneShot && mAmbientLuxValid) {
++                mSensorManager.unregisterListener(mLightSensorListener);
++                mOnyxBrightnessSensorPolicy.setEnabled(false);
++            }
++            // An invalid one-shot still needs its first reading. updateAutoBrightness() releases
++            // the light sensors once that reading has produced a usable brightness.
++            mAutoBrightnessOneShot = autoBrightnessOneShot;
++            return;
++        }
+         if (mAutoBrightnessOneShot && !autoBrightnessOneShot) {
+-            mSensorManager.registerListener(mLightSensorListener, mLightSensor,
+-                    mCurrentLightSensorRate * 1000, mHandler);
++            registerLightSensor();
+         } else if (!mAutoBrightnessOneShot && autoBrightnessOneShot) {
+             mSensorManager.unregisterListener(mLightSensorListener);
+         }
+@@ -708,6 +761,7 @@ public class AutomaticBrightnessController {
+         ipw.println("mAmbientBrightnessThresholdsIdle=" + mAmbientBrightnessThresholdsIdle);
+         ipw.println("mScreenBrightnessThresholds=" + mScreenBrightnessThresholds);
+         ipw.println("mScreenBrightnessThresholdsIdle=" + mScreenBrightnessThresholdsIdle);
++        if (mOnyxBrightnessSensorPolicy != null) mOnyxBrightnessSensorPolicy.dump(ipw);
+     }
+ 
+     public float[] getLastSensorValues() {
+@@ -732,14 +786,22 @@ public class AutomaticBrightnessController {
+     }
+ 
+     private boolean setLightSensorEnabled(boolean enable) {
++        return setLightSensorEnabled(enable, false);
++    }
++
++    private boolean setLightSensorEnabled(boolean enable, boolean firstAutoBrightness) {
+         if (enable) {
+             if (!mLightSensorEnabled) {
+                 mLightSensorEnabled = true;
+                 mLightSensorEnableTime = mClock.uptimeMillis();
+                 mCurrentLightSensorRate = mInitialLightSensorRate;
+                 registerForegroundAppUpdater();
+-                mSensorManager.registerListener(mLightSensorListener, mLightSensor,
+-                        mCurrentLightSensorRate * 1000, mHandler);
++                if (mOnyxBrightnessSensorPolicy != null) {
++                    mOnyxBrightnessSensorPolicy.setEnabled(true, firstAutoBrightness);
++                }
++                // Establish the policy's enable time before registering an on-change sensor.
++                // Its first fresh event can carry the registration timestamp itself.
++                registerLightSensor();
+                 return true;
+             }
+         } else if (mLightSensorEnabled) {
+@@ -757,12 +819,24 @@ public class AutomaticBrightnessController {
+             mHandler.removeMessages(MSG_UPDATE_AMBIENT_LUX);
+             unregisterForegroundAppUpdater();
+             mSensorManager.unregisterListener(mLightSensorListener);
++            if (mOnyxBrightnessSensorPolicy != null) {
++                mOnyxBrightnessSensorPolicy.setEnabled(false);
++            }
+         }
+         return false;
+     }
+ 
+     private void handleLightSensorEvent(long time, float lux) {
+         Trace.traceCounter(Trace.TRACE_TAG_POWER, "ALS", (int) lux);
++        if (mOnyxBrightnessSensorPolicy != null) {
++            time = mOnyxBrightnessSensorPolicy.mainLightSampleTime(time, lux);
++            if (time == OnyxLuxPolicy.SampleTime.INVALID) return;
++            if (mAmbientLightRingBuffer.size() == 0) adjustLightSensorRate(mNormalLightSensorRate);
++            if (mOnyxBrightnessSensorPolicy.onMainLight(time, lux)) {
++                applyLightSensorMeasurement(time, lux);
++            }
++            return;
++        }
+         mHandler.removeMessages(MSG_UPDATE_AMBIENT_LUX);
+ 
+         if (mAmbientLightRingBuffer.size() == 0) {
+@@ -775,7 +849,8 @@ public class AutomaticBrightnessController {
+ 
+     private void applyLightSensorMeasurement(long time, float lux) {
+         mRecentLightSamples++;
+-        mAmbientLightRingBuffer.prune(time - mAmbientLightHorizonLong);
++        mAmbientLightRingBuffer.prune(time - (mOnyxBrightnessSensorPolicy != null
++                ? 5000 : mAmbientLightHorizonLong));
+         mAmbientLightRingBuffer.push(time, lux);
+         // Remember this sample value.
+         mLastObservedLux = lux;
+@@ -792,11 +867,18 @@ public class AutomaticBrightnessController {
+             }
+             mCurrentLightSensorRate = lightSensorRate;
+             mSensorManager.unregisterListener(mLightSensorListener);
+-            mSensorManager.registerListener(mLightSensorListener, mLightSensor,
+-                    lightSensorRate * 1000, mHandler);
++            registerLightSensor();
+         }
+     }
+ 
++    private void registerLightSensor() {
++        if (mOnyxBrightnessSensorPolicy != null) {
++            mOnyxBrightnessSensorPolicy.mainLightSensorRegistered(mLightSensor);
++        }
++        mSensorManager.registerListener(mLightSensorListener, mLightSensor,
++                mCurrentLightSensorRate * 1000, mHandler);
++    }
++
+     private boolean setAutoBrightnessAdjustment(float adjustment) {
+         return mCurrentBrightnessMapper.setAutoBrightnessAdjustment(adjustment);
+     }
+@@ -810,7 +892,10 @@ public class AutomaticBrightnessController {
+             lux = 0;
+         }
+         mAmbientLux = lux;
+-        if (isInIdleMode()) {
++        if (mOnyxBrightnessSensorPolicy != null && !isInIdleMode()) {
++            mAmbientBrighteningThreshold = mOnyxBrightnessSensorPolicy.brighteningThreshold(lux);
++            mAmbientDarkeningThreshold = mOnyxBrightnessSensorPolicy.darkeningThreshold(lux);
++        } else if (isInIdleMode()) {
+             mAmbientBrighteningThreshold =
+                     mAmbientBrightnessThresholdsIdle.getBrighteningThreshold(lux);
+             mAmbientDarkeningThreshold =
+@@ -919,6 +1004,7 @@ public class AutomaticBrightnessController {
+     }
+ 
+     private void updateAmbientLux() {
++        if (mOnyxBrightnessSensorPolicy != null) return;
+         long time = mClock.getSensorEventScaleTime();
+         mAmbientLightRingBuffer.prune(time - mAmbientLightHorizonLong);
+         updateAmbientLux(time);
+@@ -1068,6 +1154,9 @@ public class AutomaticBrightnessController {
+         }
+         if (mAutoBrightnessOneShot) {
+             mSensorManager.unregisterListener(mLightSensorListener);
++            if (mOnyxBrightnessSensorPolicy != null) {
++                mOnyxBrightnessSensorPolicy.setEnabled(false);
++            }
+         }
+     }
+ 
+diff --git a/services/core/java/com/android/server/display/BrightnessMappingStrategy.java b/services/core/java/com/android/server/display/BrightnessMappingStrategy.java
+index 19195d8bb..585a22b4f 100644
+--- a/services/core/java/com/android/server/display/BrightnessMappingStrategy.java
++++ b/services/core/java/com/android/server/display/BrightnessMappingStrategy.java
+@@ -143,7 +143,10 @@ public abstract class BrightnessMappingStrategy {
+             builder.setShortTermModelLowerLuxMultiplier(SHORT_TERM_MODEL_THRESHOLD_RATIO);
+             builder.setShortTermModelUpperLuxMultiplier(SHORT_TERM_MODEL_THRESHOLD_RATIO);
+             return new PhysicalMappingStrategy(builder.build(), nitsRange, brightnessRange,
+-                    autoBrightnessAdjustmentMaxGamma, mode, preset, displayWhiteBalanceController);
++                    autoBrightnessAdjustmentMaxGamma, mode, preset, displayWhiteBalanceController,
++                    context.getResources().getBoolean(
++                            com.android.internal.R.bool.config_enableOnyxAutoBrightness)
++                            && displayDeviceConfig.isBrightnessMappingLinear());
+         } else if (isValidMapping(luxLevels, brightnessLevels)) {
+             return new SimpleMappingStrategy(luxLevels, brightnessLevels,
+                     autoBrightnessAdjustmentMaxGamma, shortTermModelTimeout, mode, preset);
+@@ -859,6 +862,10 @@ public abstract class BrightnessMappingStrategy {
+         private boolean mBrightnessRangeAdjustmentApplied;
+ 
+         private final float mMaxGamma;
++        private final boolean mUseLinearNitsMapping;
++        // Xiaomi Global caches this baseline when the user point is added, including across later
++        // configuration changes. It is independent of the adjusted control-point curve.
++        private float mUserUnadjustedBrightness;
+         private float mAutoBrightnessAdjustment;
+         private float mUserLux;
+         private float mUserBrightness;
+@@ -882,6 +889,15 @@ public abstract class BrightnessMappingStrategy {
+                 float[] brightness, float maxGamma,
+                 @AutomaticBrightnessController.AutomaticBrightnessMode int mode, int preset,
+                 @Nullable DisplayWhiteBalanceController displayWhiteBalanceController) {
++            this(config, nits, brightness, maxGamma, mode, preset, displayWhiteBalanceController,
++                    false);
++        }
++
++        PhysicalMappingStrategy(BrightnessConfiguration config, float[] nits,
++                float[] brightness, float maxGamma,
++                @AutomaticBrightnessController.AutomaticBrightnessMode int mode, int preset,
++                @Nullable DisplayWhiteBalanceController displayWhiteBalanceController,
++                boolean useLinearNitsMapping) {
+ 
+             Preconditions.checkArgument(nits.length != 0 && brightness.length != 0,
+                     "Nits and brightness arrays must not be empty!");
+@@ -896,6 +912,8 @@ public abstract class BrightnessMappingStrategy {
+             mMode = mode;
+             mPreset = preset;
+             mMaxGamma = maxGamma;
++            mUseLinearNitsMapping = useLinearNitsMapping;
++            mUserUnadjustedBrightness = PowerManager.BRIGHTNESS_INVALID_FLOAT;
+             mAutoBrightnessAdjustment = 0;
+             mUserLux = INVALID_LUX;
+             mUserBrightness = PowerManager.BRIGHTNESS_INVALID_FLOAT;
+@@ -973,6 +991,9 @@ public abstract class BrightnessMappingStrategy {
+ 
+         @Override
+         public boolean setAutoBrightnessAdjustment(float adjustment) {
++            if (mUseLinearNitsMapping && !Float.isFinite(adjustment)) {
++                adjustment = Float.isNaN(adjustment) ? 0 : Math.signum(adjustment);
++            }
+             adjustment = MathUtils.constrain(adjustment, -1, 1);
+             if (adjustment == mAutoBrightnessAdjustment) {
+                 return false;
+@@ -1009,6 +1030,13 @@ public abstract class BrightnessMappingStrategy {
+ 
+         @Override
+         public void addUserDataPoint(float lux, float brightness) {
++            if (mUseLinearNitsMapping) {
++                if (!Float.isFinite(lux) || lux < 0 || !Float.isFinite(brightness)) {
++                    return;
++                }
++                brightness = MathUtils.constrain(brightness, PowerManager.BRIGHTNESS_MIN,
++                        PowerManager.BRIGHTNESS_MAX);
++            }
+             float unadjustedBrightness = getUnadjustedBrightness(lux);
+             if (mLoggingEnabled) {
+                 Slog.d(TAG, "addUserDataPoint: (" + lux + "," + brightness + ")");
+@@ -1016,9 +1044,21 @@ public abstract class BrightnessMappingStrategy {
+                         .logPoint("user data point", lux, brightness)
+                         .logPoint("current brightness", lux, unadjustedBrightness);
+             }
+-            float adjustment = inferAutoBrightnessAdjustment(mMaxGamma,
+-                    brightness /* desiredBrightness */,
+-                    unadjustedBrightness /* currentBrightness */);
++            if (mUseLinearNitsMapping) {
++                mUserUnadjustedBrightness = unadjustedBrightness;
++            }
++            float adjustment;
++            if (mUseLinearNitsMapping && mMaxGamma == 1 && unadjustedBrightness > 0.1f
++                    && unadjustedBrightness < 0.9f && brightness > 0 && brightness < 1) {
++                // Preserve stock's float logarithms before constraining its maxGamma=1
++                // division. A gamma rounded to one would produce 0/0; report finite zero.
++                float gamma = MathUtils.log(brightness) / MathUtils.log(unadjustedBrightness);
++                adjustment = gamma == 1 ? 0 : Math.signum(-MathUtils.log(gamma));
++            } else {
++                adjustment = inferAutoBrightnessAdjustment(mMaxGamma,
++                        brightness /* desiredBrightness */,
++                        unadjustedBrightness /* currentBrightness */);
++            }
+             if (mLoggingEnabled) {
+                 Slog.d(TAG, "addUserDataPoint: " + mAutoBrightnessAdjustment + " => " +
+                         adjustment);
+@@ -1047,6 +1087,9 @@ public abstract class BrightnessMappingStrategy {
+                 mAutoBrightnessAdjustment = 0;
+                 mUserLux = INVALID_LUX;
+                 mUserBrightness = PowerManager.BRIGHTNESS_INVALID_FLOAT;
++                if (mUseLinearNitsMapping) {
++                    mUserUnadjustedBrightness = PowerManager.BRIGHTNESS_INVALID_FLOAT;
++                }
+                 computeSpline();
+             }
+         }
+@@ -1091,6 +1134,9 @@ public abstract class BrightnessMappingStrategy {
+             pw.println("  mAutoBrightnessAdjustment=" + mAutoBrightnessAdjustment);
+             pw.println("  mUserLux=" + mUserLux);
+             pw.println("  mUserBrightness=" + mUserBrightness);
++            if (mUseLinearNitsMapping) {
++                pw.println("  mUserUnadjustedBrightness=" + mUserUnadjustedBrightness);
++            }
+             pw.println("  mDefaultConfig=" + mDefaultConfig);
+             pw.println("  mBrightnessRangeAdjustmentApplied=" + mBrightnessRangeAdjustmentApplied);
+             pw.println("  shortTermModelTimeout=" + getShortTermModelTimeout());
+@@ -1242,8 +1288,13 @@ public abstract class BrightnessMappingStrategy {
+         }
+ 
+         private void computeNitsBrightnessSplines(float[] nits) {
+-            mNitsToBrightnessSpline = Spline.createSpline(nits, mBrightness);
+-            mBrightnessToNitsSpline = Spline.createSpline(mBrightness, nits);
++            // Stock Onyx uses linear panel conversion; its lux-to-nits spline remains cubic.
++            mNitsToBrightnessSpline = mUseLinearNitsMapping
++                    ? Spline.createLinearSpline(nits, mBrightness)
++                    : Spline.createSpline(nits, mBrightness);
++            mBrightnessToNitsSpline = mUseLinearNitsMapping
++                    ? Spline.createLinearSpline(mBrightness, nits)
++                    : Spline.createSpline(mBrightness, nits);
+         }
+ 
+         private void computeSpline() {
+@@ -1254,8 +1305,10 @@ public abstract class BrightnessMappingStrategy {
+             for (int i = 0; i < defaultBrightness.length; i++) {
+                 defaultBrightness[i] = mAdjustedNitsToBrightnessSpline.interpolate(defaultNits[i]);
+             }
+-            Pair<float[], float[]> curve = getAdjustedCurve(defaultLux, defaultBrightness, mUserLux,
+-                    mUserBrightness, mAutoBrightnessAdjustment, mMaxGamma);
++            Pair<float[], float[]> curve = mUseLinearNitsMapping
++                    ? getOnyxAdjustedCurve(defaultLux, defaultBrightness)
++                    : getAdjustedCurve(defaultLux, defaultBrightness, mUserLux,
++                            mUserBrightness, mAutoBrightnessAdjustment, mMaxGamma);
+             float[] lux = curve.first;
+             float[] brightness = curve.second;
+             float[] nits = new float[brightness.length];
+@@ -1265,6 +1318,54 @@ public abstract class BrightnessMappingStrategy {
+             mBrightnessSpline = Spline.createSpline(lux, nits);
+         }
+ 
++        private Pair<float[], float[]> getOnyxAdjustedCurve(float[] lux, float[] brightness) {
++            // Keep stock gamma processing, but insert the user point through Xiaomi Global's
++            // smoother rather than the generic permissible-ratio clamps.
++            Pair<float[], float[]> curve = getAdjustedCurve(lux, brightness, INVALID_LUX,
++                    PowerManager.BRIGHTNESS_INVALID_FLOAT, mAutoBrightnessAdjustment, mMaxGamma);
++            return mUserLux == INVALID_LUX ? curve : insertOnyxUserPoint(curve.first,
++                    curve.second, mUserLux, mUserBrightness, mUserUnadjustedBrightness);
++        }
++
++        private static Pair<float[], float[]> insertOnyxUserPoint(float[] lux, float[] brightness,
++                float userLux, float userBrightness, float unadjustedBrightness) {
++            int idx = 0;
++            while (idx < lux.length && lux[idx] < userLux) {
++                idx++;
++            }
++            float[] newLux;
++            float[] newBrightness;
++            if (idx < lux.length && lux[idx] == userLux) {
++                newLux = Arrays.copyOf(lux, lux.length);
++                newBrightness = Arrays.copyOf(brightness, brightness.length);
++            } else {
++                newLux = new float[lux.length + 1];
++                newBrightness = new float[brightness.length + 1];
++                System.arraycopy(lux, 0, newLux, 0, idx);
++                System.arraycopy(brightness, 0, newBrightness, 0, idx);
++                System.arraycopy(lux, idx, newLux, idx + 1, lux.length - idx);
++                System.arraycopy(brightness, idx, newBrightness, idx + 1,
++                        brightness.length - idx);
++            }
++            newLux[idx] = userLux;
++            newBrightness[idx] = userBrightness;
++
++            // Verified against Xiaomi Global BrightnessMappingStrategyImpl.smoothNewCurve.
++            // Preserve the shipped float operation order, not just its algebraic equivalent.
++            for (int i = idx + 1; i < newLux.length; i++) {
++                newBrightness[i] = newBrightness[i]
++                        - (unadjustedBrightness - newBrightness[idx]);
++                newBrightness[i] = MathUtils.max(newBrightness[i], newBrightness[i - 1]);
++            }
++            for (int i = idx - 1; i >= 0; i--) {
++                newBrightness[i] = newBrightness[i]
++                        - (((unadjustedBrightness - newBrightness[idx]) * newBrightness[i])
++                                / unadjustedBrightness);
++                newBrightness[i] = MathUtils.min(newBrightness[i], newBrightness[i + 1]);
++            }
++            return Pair.create(newLux, newBrightness);
++        }
++
+         private float getUnadjustedBrightness(float lux) {
+             Pair<float[], float[]> curve = mConfig.getCurve();
+             Spline spline = Spline.createSpline(curve.first, curve.second);
+diff --git a/services/core/java/com/android/server/display/DisplayDeviceConfig.java b/services/core/java/com/android/server/display/DisplayDeviceConfig.java
+index f25b593c2..e0e814755 100644
+--- a/services/core/java/com/android/server/display/DisplayDeviceConfig.java
++++ b/services/core/java/com/android/server/display/DisplayDeviceConfig.java
+@@ -1145,6 +1145,10 @@ public class DisplayDeviceConfig {
+         return mName;
+     }
+ 
++    boolean isBrightnessMappingLinear() {
++        return mInterpolationType == INTERPOLATION_LINEAR;
++    }
++
+     /**
+      * Return the brightness mapping nits array.
+      *
+diff --git a/services/core/java/com/android/server/display/DisplayPowerController.java b/services/core/java/com/android/server/display/DisplayPowerController.java
+index f839a319d..ffd5c5cc1 100644
+--- a/services/core/java/com/android/server/display/DisplayPowerController.java
++++ b/services/core/java/com/android/server/display/DisplayPowerController.java
+@@ -443,6 +443,8 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+     // Animators.
+     private ObjectAnimator mColorFadeOffAnimator;
+     private DualRampAnimator<DisplayPowerState> mScreenBrightnessRampAnimator;
++    @Nullable
++    private OnyxBrightnessRampController mOnyxBrightnessRampController;
+ 
+     // True if this DisplayPowerController has been stopped and should no longer be running.
+     private boolean mStopped;
+@@ -997,6 +999,10 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+         setAnimatorConfig(mAutomaticBrightnessController != null
+                 && mAutomaticBrightnessController.isInIdleMode());
+         mScreenBrightnessRampAnimator.setListener(mRampAnimatorListener);
++        if (mOnyxBrightnessRampController != null) {
++            mScreenBrightnessRampAnimator.setOnyxBrightnessRampController(
++                    mOnyxBrightnessRampController);
++        }
+ 
+         noteScreenState(mPowerState.getScreenState(), Display.STATE_REASON_DEFAULT_POLICY);
+         noteScreenBrightness(mPowerState.getScreenBrightness());
+@@ -1043,9 +1049,14 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+ 
+     private void setUpAutoBrightness(Context context, Handler handler) {
+         mUseSoftwareAutoBrightnessConfig = mDisplayDeviceConfig.isAutoBrightnessAvailable();
++        setUpOnyxBrightnessRamp(context);
+ 
+         if (!mUseSoftwareAutoBrightnessConfig || (Flags.changeDefaultDisplayLidClosed()
+                 && !mIsDisplayInternal)) {
++            // Onyx sensor listeners must also stop when a reloaded display loses auto brightness.
++            if (mAutomaticBrightnessController != null) {
++                mAutomaticBrightnessController.stop();
++            }
+             mAutomaticBrightnessController = null;
+             mDisplayBrightnessController.resetAutoBrightness();
+             return;
+@@ -1100,6 +1111,9 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+         if (mAutomaticBrightnessController != null) {
+             userLux = mAutomaticBrightnessController.getUserLux();
+             userNits = mAutomaticBrightnessController.getUserNits();
++            // Onyx runtime listeners belong to this instance; preserve user state, then stop it.
++            mAutomaticBrightnessController.stop();
++            mAutomaticBrightnessController = null;
+         }
+ 
+         if (defaultModeBrightnessMapper != null) {
+@@ -1162,6 +1176,14 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+                     screenBrightnessThresholdsIdle, mContext, mBrightnessRangeController,
+                     mBrightnessClamperController, mDisplayDeviceConfig.getAmbientHorizonShort(),
+                     mDisplayDeviceConfig.getAmbientHorizonLong(), userLux, userNits, mFlags);
++            if (mOnyxBrightnessRampController != null) {
++                mOnyxBrightnessRampController.setBrightnessMapper(defaultModeBrightnessMapper);
++                final HighBrightnessModeData hbm =
++                        mDisplayDeviceConfig.getHighBrightnessModeData();
++                mAutomaticBrightnessController.setOnyxBrightnessSensorPolicy(
++                        OnyxBrightnessSensorPolicy.Config.stock(true,
++                                hbm == null ? 4475f : hbm.minimumLux));
++            }
+             mDisplayBrightnessController.setUpAutoBrightness(
+                     mAutomaticBrightnessController, mSensorManager, mDisplayDeviceConfig, mHandler,
+                     defaultModeBrightnessMapper, mIsEnabled, mLeadDisplayId);
+@@ -1169,6 +1191,25 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+                     new RingBuffer<>(BrightnessEvent.class, RINGBUFFER_MAX);
+         } else {
+             mUseSoftwareAutoBrightnessConfig = false;
++            // Onyx policy reload must clear the old automatic mapper when none replaces it.
++            mDisplayBrightnessController.resetAutoBrightness();
++        }
++    }
++
++    private void setUpOnyxBrightnessRamp(Context context) {
++        final float[] nits = mDisplayDeviceConfig.getNits();
++        final float[] brightness = mDisplayDeviceConfig.getBrightness();
++        final boolean enabled = mDisplayId == Display.DEFAULT_DISPLAY && mIsDisplayInternal
++                && context.getResources().getBoolean(R.bool.config_enableOnyxAutoBrightness)
++                && mDisplayDeviceConfig.isBrightnessMappingLinear()
++                && nits != null && nits.length >= 2
++                && brightness != null && brightness.length == nits.length;
++        final boolean wasEnabled = mOnyxBrightnessRampController != null;
++        mOnyxBrightnessRampController = enabled
++                ? new OnyxBrightnessRampController(mDisplayDeviceConfig) : null;
++        if (mScreenBrightnessRampAnimator != null && (enabled || wasEnabled)) {
++            mScreenBrightnessRampAnimator.setOnyxBrightnessRampController(
++                    mOnyxBrightnessRampController);
+         }
+     }
+ 
+@@ -1363,6 +1404,10 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+             initialize(readyToUpdateDisplayState() ? state : Display.STATE_UNKNOWN);
+         }
+ 
++        final boolean wasOnyxDozing = !mustInitialize
++                && (Display.isDozeState(mPowerState.getScreenState())
++                        || previousPolicy == POLICY_DOZE);
++
+         // Animate the screen state change unless already animating.
+         // The transition may be deferred, so after this point we will use the
+         // actual state instead of the desired one.
+@@ -1574,7 +1619,8 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+                     && (animateValue != currentBrightness
+                     || sdrAnimateValue != currentSdrBrightness)) {
+                 boolean skipAnimation = initialRampSkip || hasBrightnessBuckets
+-                        || !isDisplayContentVisible || brightnessIsTemporary;
++                        || !isDisplayContentVisible
++                        || (brightnessIsTemporary && mOnyxBrightnessRampController == null);
+                 final boolean isHdrOnlyChange = BrightnessSynchronizer.floatEquals(
+                         sdrAnimateValue, currentSdrBrightness);
+                 if (mFlags.isFastHdrTransitionsEnabled() && !skipAnimation && isHdrOnlyChange) {
+@@ -1586,6 +1632,22 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+                     // display configuration. For now just do the fast animation
+                     slowChange = false;
+                 }
++                if (mOnyxBrightnessRampController != null) {
++                    final boolean fastAuto = mAutomaticBrightnessController != null
++                            && mAutomaticBrightnessController.shouldUseOnyxFastRate(
++                                    currentSdrBrightness, sdrAnimateValue);
++                    mOnyxBrightnessRampController.setTransition(getOnyxBrightnessRampMode(
++                            mBrightnessReasonTemp, state, wasOnyxDozing,
++                            mPowerRequest.policy == DisplayPowerRequest.POLICY_BRIGHT
++                                    && (previousPolicy == DisplayPowerRequest.POLICY_DIM
++                                            || (mBrightnessReason.getModifier()
++                                                    & BrightnessReason.MODIFIER_DIMMED) != 0),
++                            brightnessIsTemporary, animateValue > sdrAnimateValue
++                                    || currentBrightness > currentSdrBrightness
++                                    || (mBrightnessReason.getModifier()
++                                            & BrightnessReason.MODIFIER_HDR) != 0,
++                            fastAuto || !slowChange), slowChange);
++                }
+                 if (skipAnimation) {
+                     animateScreenBrightness(animateValue, sdrAnimateValue,
+                             SCREEN_ANIMATION_RATE_MINIMUM);
+@@ -2187,6 +2249,41 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+                 mBrightnessRangeController.getCurrentBrightnessMax());
+     }
+ 
++    @VisibleForTesting
++    static int getOnyxBrightnessRampMode(BrightnessReason reason, int state, boolean wasDozing,
++            boolean wasDimmed, boolean temporary, boolean hdr, boolean fastAuto) {
++        final int modifiers = reason.getModifier();
++        if (wasDimmed || (modifiers & BrightnessReason.MODIFIER_DIMMED) != 0) {
++            return OnyxBrightnessRampController.DIM;
++        }
++        if (Display.isDozeState(state)
++                || reason.getReason() == BrightnessReason.REASON_DOZE
++                || reason.getReason() == BrightnessReason.REASON_DOZE_DEFAULT
++                || reason.getReason() == BrightnessReason.REASON_DOZE_MANUAL) {
++            return OnyxBrightnessRampController.DOZE;
++        }
++        if (state == Display.STATE_ON && wasDozing && !hdr
++                && (modifiers & BrightnessReason.MODIFIER_HDR) == 0) {
++            return OnyxBrightnessRampController.DOZE_TO_ON;
++        }
++        if (temporary) {
++            return OnyxBrightnessRampController.TEMPORARY;
++        }
++        if (reason.getReason() == BrightnessReason.REASON_OVERRIDE) {
++            return OnyxBrightnessRampController.MANUAL;
++        }
++        if (hdr || (modifiers & BrightnessReason.MODIFIER_HDR) != 0) {
++            return OnyxBrightnessRampController.HDR;
++        }
++        if ((modifiers & BrightnessReason.MODIFIER_THROTTLED) != 0) {
++            return OnyxBrightnessRampController.THERMAL;
++        }
++        if (reason.getReason() == BrightnessReason.REASON_AUTOMATIC && !fastAuto) {
++            return OnyxBrightnessRampController.AUTO;
++        }
++        return OnyxBrightnessRampController.MANUAL;
++    }
++
+     private void animateScreenBrightness(float target, float sdrTarget, float rate) {
+         animateScreenBrightness(target, sdrTarget, rate, /* ignoreAnimationLimits = */false);
+     }
+@@ -2199,8 +2296,12 @@ final class DisplayPowerController implements AutomaticBrightnessController.Call
+         }
+         float luxDelta = mAutomaticBrightnessController == null ? INVALID_LUX
+                 : mAutomaticBrightnessController.getLuxDelta();
+-        if (mScreenBrightnessRampAnimator.animateTo(target, sdrTarget, rate,
+-                ignoreAnimationLimits, luxDelta)) {
++        final boolean changed = mOnyxBrightnessRampController != null && ignoreAnimationLimits
++                ? mScreenBrightnessRampAnimator.animateToWithCustomRate(
++                        target, sdrTarget, rate, true, luxDelta)
++                : mScreenBrightnessRampAnimator.animateTo(
++                        target, sdrTarget, rate, ignoreAnimationLimits, luxDelta);
++        if (changed) {
+             Trace.traceCounter(Trace.TRACE_TAG_POWER, "TargetScreenBrightness", (int) target);
+ 
+             String propertyKey = "debug.tracing.screen_brightness";
+diff --git a/services/core/java/com/android/server/display/OnyxBrightnessRampController.java b/services/core/java/com/android/server/display/OnyxBrightnessRampController.java
+new file mode 100644
+index 000000000..1963d69c4
+--- /dev/null
++++ b/services/core/java/com/android/server/display/OnyxBrightnessRampController.java
+@@ -0,0 +1,342 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.server.display;
++
++import com.android.internal.annotations.VisibleForTesting;
++import com.android.server.display.config.HighBrightnessModeData;
++
++/**
++ * Opt-in port of Onyx's shipped brightness ramp equations. Rates and integration are in linear
++ * framework brightness, not the HLG space used by the ordinary Android animator. The display
++ * power controller selects the transition from Android brightness reasons; this class has no
++ * dependency on vendor services or device properties.
++ */
++final class OnyxBrightnessRampController {
++    static final int AUTO = 0;
++    static final int MANUAL = 1;
++    static final int TEMPORARY = 2;
++    static final int DIM = 3;
++    static final int HDR = 4;
++    static final int DOZE_TO_ON = 5;
++    static final int DOZE = 6;
++    static final int THERMAL = 7;
++
++    // Stock's brightness integer domain is 1..16383, not Android's legacy 1..255.
++    private static final int BRIGHTNESS_MAX_INT = 16383;
++    static final float MINIMUM_RATE = 1.0f / BRIGHTNESS_MAX_INT;
++    static final float SLOW_SAFEGUARD_RATE = 0.232283f;
++    static final float FAST_SAFEGUARD_RATE = 0.415903f;
++
++    private static final float[] NITS_LEVELS =
++            {800f, 251f, 150f, 100f, 70f, 50f, 40f, 30f, 28.5f};
++    private static final float[] A_LEVELS =
++            {800f, 569.48f, 344.89f, 237.75f, 179.71f, 135.19f, 113.59f, 62.84f, 676.87f};
++    private static final float[] B_LEVELS =
++            {0.9887f, 0.992f, 0.995f, 0.9965f, 0.9973f, 0.9979f, 0.9982f, 0.999f, 0.996f};
++
++    interface NitMapper {
++        float toNits(float brightness);
++        float toBrightness(float nits);
++    }
++
++    private final NitMapper mDefaultMapper;
++    private final float[] mBrightness;
++    private final float[] mNits;
++    private final float mNormalMaximumBrightness;
++    private NitMapper mMapper;
++    private int mMode = AUTO;
++    private boolean mSlowChange = true;
++    private int mTransitionVersion;
++
++    OnyxBrightnessRampController(DisplayDeviceConfig config) {
++        this(new NitMapper() {
++            @Override
++            public float toNits(float brightness) {
++                return config.getNitsFromBacklight(config.getBacklightFromBrightness(brightness));
++            }
++
++            @Override
++            public float toBrightness(float nits) {
++                return config.getBrightnessFromBacklight(config.getBacklightFromNits(nits));
++            }
++        }, config.getBrightness(), config.getNits(), getNormalMaximumBrightness(config));
++    }
++
++    private static float getNormalMaximumBrightness(DisplayDeviceConfig config) {
++        HighBrightnessModeData hbm = config.getHighBrightnessModeData();
++        return hbm == null ? 1f : hbm.transitionPoint;
++    }
++
++    @VisibleForTesting
++    OnyxBrightnessRampController(NitMapper mapper, float[] brightness, float[] nits,
++            float normalMaximumBrightness) {
++        mDefaultMapper = mapper;
++        mMapper = mapper;
++        mBrightness = brightness == null ? null : brightness.clone();
++        mNits = nits == null ? null : nits.clone();
++        mNormalMaximumBrightness = normalMaximumBrightness;
++    }
++
++    /** Select once per display-power update, before animateTo; unchanged updates do not restart. */
++    void setTransition(int mode, boolean slowChange) {
++        if (mode != mMode || slowChange != mSlowChange) {
++            mMode = mode;
++            mSlowChange = slowChange;
++            mTransitionVersion++;
++        }
++    }
++
++    /**
++     * Use the currently adjusted physical mapper when available. This keeps Reduce Bright Colors
++     * changes in the conversion path and retains the display-config mapping for manual-only
++     * displays. The mapper is consulted on every frame, including after recalculateSplines.
++     */
++    void setBrightnessMapper(BrightnessMappingStrategy mapper) {
++        mMapper = mapper == null ? mDefaultMapper : new NitMapper() {
++            @Override
++            public float toNits(float brightness) {
++                float nits = mapper.convertToAdjustedNits(brightness);
++                return isPositiveFinite(nits) ? nits : mDefaultMapper.toNits(brightness);
++            }
++
++            @Override
++            public float toBrightness(float nits) {
++                float brightness = mapper.getBrightnessFromAdjustedNits(nits);
++                return isPositiveFinite(brightness) ? brightness
++                        : mDefaultMapper.toBrightness(nits);
++            }
++        };
++    }
++
++    State newState() {
++        return new State();
++    }
++
++    /** SDR and HDR animators each retain their own start, target, and limit. */
++    final class State {
++        private float mStart;
++        private float mTarget = Float.NaN;
++        private float mFallbackRate;
++        private float mLimitRate;
++        private int mVersion = -1;
++
++        void setTarget(float current, float target, float fallbackRate, float maxTimeSeconds) {
++            if (target != mTarget || mVersion != mTransitionVersion) {
++                mStart = current;
++                mTarget = target;
++                mVersion = mTransitionVersion;
++                mLimitRate = maxTimeSeconds > 0 ? Math.abs(target - current) / maxTimeSeconds : 0;
++            } else if (maxTimeSeconds > 0) {
++                // A faster request may tighten the bound without extending an existing ramp.
++                mLimitRate = Math.max(mLimitRate, Math.abs(target - current) / maxTimeSeconds);
++            }
++            mFallbackRate = fallbackRate;
++        }
++
++        @VisibleForTesting
++        float getRate(float current) {
++            // The low-level stock decompilation confirms this is the equality branch only.
++            // Distinct integers proceed to the custom equations, even for a tiny float delta.
++            if (mFallbackRate > 0 && brightnessToInt(current) == brightnessToInt(mTarget)) {
++                return Math.max(mLimitRate,
++                        mSlowChange ? SLOW_SAFEGUARD_RATE : FAST_SAFEGUARD_RATE);
++            }
++            float rate;
++            if (mTarget <= 0 || mFallbackRate <= 0) {
++                rate = mFallbackRate;
++            } else if (mMode == THERMAL) {
++                rate = getThermalRate(current);
++            } else if (mMode == AUTO) {
++                rate = mTarget > mStart ? getAutoBrighteningRate(current, mStart, mTarget)
++                        : getAutoDarkeningRate(current);
++            } else {
++                float durationMillis = getDurationSeconds(mMode, mTarget > mStart) * 1000f;
++                if (mTarget > mStart) {
++                    // Stock brightening log curve: dB/dt = (exp(target)-exp(start))/T/exp(B).
++                    float coefficient = (((float) Math.exp(mTarget) - (float) Math.exp(mStart))
++                            * 1000f) / durationMillis;
++                    rate = coefficient / (float) Math.exp(current);
++                } else {
++                    // Stock darkening exponential curve: dB/dt = abs(log(target/start)/T)*B.
++                    float coefficient = ((float) Math.log(mTarget / mStart) * 1000f)
++                            / durationMillis;
++                    rate = Math.abs(coefficient * current);
++                }
++            }
++            if (!isPositiveFinite(rate)) {
++                rate = mFallbackRate;
++            }
++            // Shipped minimum-rate floors belong to automatic brightening/darkening only;
++            // duration-based manual/HDR/doze curves must retain smaller rates for small deltas.
++            if (mMode == AUTO && rate > 0) {
++                rate = Math.max(MINIMUM_RATE, rate);
++            }
++            return Math.max(mLimitRate, rate);
++        }
++
++        float advance(float current, float elapsedSeconds) {
++            return advance(current, elapsedSeconds, 1f);
++        }
++
++        float advance(float current, float elapsedSeconds, float durationScale) {
++            if (current == mTarget || elapsedSeconds <= 0) {
++                return current;
++            }
++            // Shipped RampAnimator samples the custom rate at the start of each VSYNC and
++            // advances once by rate * delta / durationScale. Preserve that Euler arithmetic,
++            // including its refresh-rate dependence and behavior after a skipped frame.
++            float amount = (getRate(current) * elapsedSeconds) / durationScale;
++            float result = clamp(mTarget > current ? current + amount : current - amount);
++            // A rounding residue must not extend a configured hard maximum by another VSYNC.
++            return Math.abs(result - mTarget) <= Math.ulp(mTarget) * 2 ? mTarget : result;
++        }
++
++        private float clamp(float value) {
++            return mTarget > mStart ? Math.min(mTarget, Math.max(mStart, value))
++                    : Math.max(mTarget, Math.min(mStart, value));
++        }
++    }
++
++    private float getAutoBrighteningRate(float current, float start, float target) {
++        float nits = mMapper.toNits(current);
++        float startNits = mMapper.toNits(start);
++        float targetNits = mMapper.toNits(target);
++        if (!isPositiveFinite(nits) || !isPositiveFinite(startNits)
++                || !isPositiveFinite(targetNits)) {
++            return Float.NaN;
++        }
++        if (startNits < 35f) {
++            if (targetNits < 35f) {
++                // This stock branch converts the nit difference itself, not two endpoints.
++                return mMapper.toBrightness(targetNits - startNits) / 4f;
++            }
++            if (targetNits < 265f) {
++                return nits < 35f ? (mMapper.toBrightness(35f) - start) / 1.8f
++                        : getExponentialRate(35f, targetNits, current, 2.2f);
++            }
++            if (nits < 35f) {
++                return (mMapper.toBrightness(35f) - start) / 0.8f;
++            }
++            return nits < 87.450005f
++                    ? getExponentialRate(35f, 87.450005f, current, 1f)
++                    : getExponentialRate(87.450005f, targetNits, current, 2.2f);
++        }
++        if (startNits >= 265f || targetNits < 265f) {
++            return getExponentialRate(startNits, targetNits, current, 4f);
++        }
++        return nits < 87.450005f
++                ? getExponentialRate(startNits, 87.450005f, current, 1.8f)
++                : getExponentialRate(87.450005f, targetNits, current, 2.2f);
++    }
++
++    private float getExponentialRate(float startNits, float targetNits, float current,
++            float durationSeconds) {
++        float start = mMapper.toBrightness(startNits);
++        float target = mMapper.toBrightness(targetNits);
++        // Converting current nits back to brightness is intentional in the shipped equation.
++        float brightness = mMapper.toBrightness(mMapper.toNits(current));
++        float coefficient = (float) Math.log(target / start) / durationSeconds;
++        return coefficient * brightness;
++    }
++
++    private float getAutoDarkeningRate(float current) {
++        float nits = mMapper.toNits(current);
++        if (!isPositiveFinite(nits)) {
++            return Float.NaN;
++        }
++        int index = getNitBand(nits);
++        float a = A_LEVELS[index];
++        float b = B_LEVELS[index];
++        float time = Math.abs(((float) Math.log(nits / a) / (float) Math.log(b)) / 24f);
++        float nitRate = Math.abs(a * 24f * (float) Math.pow(b, time * 24f)
++                * (float) Math.log(b));
++        float normalNits = mMapper.toNits(mNormalMaximumBrightness);
++        if (!isPositiveFinite(normalNits)) {
++            normalNits = 500f;
++        }
++        // Onyx's stock config_max_hbm_brightness_for_peak and
++        // config_clamped_hdr_brightness_for_opr_optimize are both 1.0.
++        float maxNits = mMapper.toNits(1f);
++        if (nits > normalNits && maxNits > normalNits) {
++            // Stock normalizes the *integer difference*; subtracting floats loses one DBV step.
++            float hbmRange = brightnessIntToFloat(BRIGHTNESS_MAX_INT
++                    - brightnessToInt(mNormalMaximumBrightness));
++            return hbmRange * nitRate / (maxNits - normalNits);
++        }
++        // Stock Onyx config_supdark_brt_available is false, so there is no sub-3.5 nit override.
++        // The stock <=40 nit constant-rate branch requires a normal max below integer 4095.
++        // Onyx's 0.499938957 transition quantizes to 8191 and keeps the nonlinear curve.
++        if (nits <= 40f && brightnessToInt(mNormalMaximumBrightness) < 4095) {
++            return 40f / BRIGHTNESS_MAX_INT;
++        }
++        return nitRate * mNormalMaximumBrightness / normalNits;
++    }
++
++    private float getThermalRate(float current) {
++        if (mBrightness != null && mNits != null && mBrightness.length == mNits.length) {
++            for (int i = mBrightness.length - 2; i >= 0; i--) {
++                if (current >= mBrightness[i] && mNits[i + 1] > mNits[i]) {
++                    return 10f * (mBrightness[i + 1] - mBrightness[i])
++                            / (mNits[i + 1] - mNits[i]);
++                }
++            }
++        }
++        return MINIMUM_RATE;
++    }
++
++    @VisibleForTesting
++    static int getNitBand(float nits) {
++        int index = 1;
++        while (index < NITS_LEVELS.length && nits < NITS_LEVELS[index]) {
++            index++;
++        }
++        return index - 1;
++    }
++
++    @VisibleForTesting
++    static float getDurationSeconds(int mode, boolean increase) {
++        switch (mode) {
++            case DIM:
++                return 1.2f;
++            case TEMPORARY:
++                return 0.5f;
++            case HDR:
++                return 4f;
++            case DOZE_TO_ON:
++                return increase ? 0.35f : 0.8f;
++            case DOZE:
++                return 0.45f;
++            default:
++                return 0.8f;
++        }
++    }
++
++    private static boolean isPositiveFinite(float value) {
++        return value > 0 && Float.isFinite(value);
++    }
++
++    @VisibleForTesting
++    static int brightnessToInt(float brightness) {
++        return Math.round(1f + Math.max(0f, Math.min(1f, brightness))
++                * (BRIGHTNESS_MAX_INT - 1));
++    }
++
++    private static float brightnessIntToFloat(int brightness) {
++        return Math.max(0f, Math.min(1f,
++                (brightness - 1f) / (BRIGHTNESS_MAX_INT - 1)));
++    }
++}
+diff --git a/services/core/java/com/android/server/display/OnyxBrightnessSensorPolicy.java b/services/core/java/com/android/server/display/OnyxBrightnessSensorPolicy.java
+new file mode 100644
+index 000000000..f6e1f4b72
+--- /dev/null
++++ b/services/core/java/com/android/server/display/OnyxBrightnessSensorPolicy.java
+@@ -0,0 +1,387 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.server.display;
++
++import android.content.Context;
++import android.graphics.Rect;
++import android.hardware.Sensor;
++import android.hardware.SensorEvent;
++import android.hardware.SensorEventListener;
++import android.hardware.SensorManager;
++import android.hardware.camera2.CameraAccessException;
++import android.hardware.camera2.CameraCharacteristics;
++import android.hardware.camera2.CameraManager;
++import android.hardware.display.DisplayManager;
++import android.hardware.input.InputManager;
++import android.os.Handler;
++import android.util.Slog;
++import android.view.Display;
++import android.view.DisplayInfo;
++import android.view.InputEvent;
++import android.view.InputEventReceiver;
++import android.view.InputMonitor;
++import android.view.MotionEvent;
++import android.view.Surface;
++
++import java.io.PrintWriter;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.concurrent.TimeUnit;
++
++/** Platform integration for {@link OnyxLuxPolicy}, confined to the ABC's handler. */
++final class OnyxBrightnessSensorPolicy {
++    private static final String TAG = "OnyxBrightnessSensorPolicy";
++    private static final int ASSIST_SENSOR_TYPE = 33171055;
++    private static final int POCKET_SENSOR_TYPE = 33171027;
++    private static final String[] CAMERA_ROLE_TAGS = {
++            "com.xiaomi.cameraid.role.cameraIds", "com.xiaomi.cameraid.role.cameraId"};
++
++    static final class Config {
++        final boolean enabled;
++        final OnyxLuxPolicy.Thresholds thresholds;
++        final long smallDebounce;
++        final Rect touchRect;
++        final long touchDebounce;
++        final long initialFastWindow;
++        final long pocketFastWindow;
++        final long torchCooldown;
++
++        Config(boolean enabled, OnyxLuxPolicy.Thresholds thresholds, long smallDebounce,
++                int[] touchRect, long touchDebounce, long initialFastWindow,
++                long pocketFastWindow, long torchCooldown) {
++            if (touchRect == null || touchRect.length != 4 || touchDebounce < 0
++                    || initialFastWindow < 0 || pocketFastWindow < 0 || torchCooldown < 0) {
++                throw new IllegalArgumentException("Invalid Onyx protection configuration");
++            }
++            this.enabled = enabled;
++            this.thresholds = thresholds;
++            this.smallDebounce = smallDebounce;
++            this.touchRect = new Rect(touchRect[0], touchRect[1], touchRect[2], touchRect[3]);
++            this.touchDebounce = touchDebounce;
++            this.initialFastWindow = initialFastWindow;
++            this.pocketFastWindow = pocketFastWindow;
++            this.torchCooldown = torchCooldown;
++        }
++
++        static Config stock(boolean enabled, float hbmMinimumLux) {
++            return new Config(enabled, OnyxLuxPolicy.Thresholds.stock(hbmMinimumLux), 5000,
++                    new int[] {0, 0, 1440, 750}, 1000, 3000, 2000, 1800);
++        }
++    }
++
++    private final Context mContext;
++    private final SensorManager mSensorManager;
++    private final Handler mHandler;
++    private final AutomaticBrightnessController.Clock mClock;
++    private final Config mConfig;
++    private final OnyxLuxPolicy mPolicy;
++    private final OnyxLuxPolicy.FastRateState mFastRateState = new OnyxLuxPolicy.FastRateState();
++    private final Sensor mAssistSensor;
++    private final Sensor mPocketSensor;
++    private final CameraManager mCameraManager;
++    private final DisplayManager mDisplayManager;
++    private final int mRate;
++    private final Map<String, Boolean> mTorchStates = new HashMap<>();
++    private final Map<String, Boolean> mExcludedTorchCameras = new HashMap<>();
++    private final OnyxLuxPolicy.SampleTime mMainSampleTime = new OnyxLuxPolicy.SampleTime();
++    private final OnyxLuxPolicy.SampleTime mAssistSampleTime = new OnyxLuxPolicy.SampleTime();
++    private boolean mEnabled;
++    private boolean mAssistRegistered;
++    private boolean mPocketRegistered;
++    private boolean mTorchRegistered;
++    private boolean mStopped;
++    private float mPocketValue;
++    private long mFastChangeUntil = Long.MIN_VALUE;
++    private InputMonitor mInputMonitor;
++    private InputEventReceiver mInputReceiver;
++    private final Rect mTouchRect = new Rect();
++
++    OnyxBrightnessSensorPolicy(Context context, SensorManager sensorManager, Handler handler,
++            AutomaticBrightnessController.Clock clock, Config config,
++            OnyxLuxPolicy.Listener listener, int longHorizon, int shortHorizon, int warmUp,
++            int rate, long brightDebounce, long darkDebounce) {
++        mContext = context;
++        mSensorManager = sensorManager;
++        mHandler = handler;
++        mClock = clock;
++        mConfig = config;
++        mRate = rate;
++        mPolicy = new OnyxLuxPolicy(config.thresholds, (lux, fast, slow, fastChange) -> {
++            if (fastChange) mFastChangeUntil = now() + 2000;
++            mFastRateState.ambientUpdated(now());
++            listener.onAmbientLux(lux, fast, slow, fastChange);
++        }, longHorizon, shortHorizon, warmUp, rate, brightDebounce, darkDebounce,
++                config.smallDebounce, config.initialFastWindow, config.pocketFastWindow,
++                config.torchCooldown);
++        mAssistSensor = sensorManager.getDefaultSensor(ASSIST_SENSOR_TYPE);
++        Sensor pocketSensor = sensorManager.getDefaultSensor(POCKET_SENSOR_TYPE);
++        mPocketSensor = pocketSensor != null ? pocketSensor
++                : sensorManager.getDefaultSensor(POCKET_SENSOR_TYPE, true);
++        mCameraManager = context.getSystemService(CameraManager.class);
++        mDisplayManager = context.getSystemService(DisplayManager.class);
++        findExcludedTorchCameras();
++        if (mCameraManager != null) {
++            mCameraManager.registerTorchCallback(mTorchCallback, mHandler);
++            mTorchRegistered = true;
++        }
++    }
++
++    void setEnabled(boolean enabled) {
++        setEnabled(enabled, false);
++    }
++
++    void setEnabled(boolean enabled, boolean firstAutoBrightness) {
++        if (mStopped && enabled) return;
++        if (enabled == mEnabled) return;
++        mEnabled = enabled;
++        mPolicy.setEnabled(enabled, now());
++        mFastChangeUntil = Long.MIN_VALUE;
++        mFastRateState.reset(enabled && firstAutoBrightness);
++        mPocketValue = 0;
++        if (enabled) {
++            if (mAssistSensor != null) {
++                mAssistSampleTime.registered(now(),
++                        mAssistSensor.getReportingMode() == Sensor.REPORTING_MODE_ON_CHANGE);
++                mAssistRegistered = mSensorManager.registerListener(mAssistListener, mAssistSensor,
++                        mRate * 1000, mHandler);
++            }
++            if (mPocketSensor != null) {
++                mPocketRegistered = mSensorManager.registerListener(mPocketListener, mPocketSensor,
++                        SensorManager.SENSOR_DELAY_NORMAL, mHandler);
++            }
++            startTouchTracking();
++        } else {
++            mMainSampleTime.clear();
++            mAssistSampleTime.clear();
++            mHandler.removeCallbacks(mUpdate);
++            if (mAssistRegistered) mSensorManager.unregisterListener(mAssistListener);
++            if (mPocketRegistered) mSensorManager.unregisterListener(mPocketListener);
++            mAssistRegistered = false;
++            mPocketRegistered = false;
++            if (mInputReceiver != null) mInputReceiver.dispose();
++            if (mInputMonitor != null) mInputMonitor.dispose();
++            mInputReceiver = null;
++            mInputMonitor = null;
++        }
++    }
++
++    void stop() {
++        setEnabled(false);
++        if (mTorchRegistered) mCameraManager.unregisterTorchCallback(mTorchCallback);
++        mTorchRegistered = false;
++        mStopped = true;
++    }
++
++    boolean onMainLight(long time, float lux) {
++        boolean accepted = mPolicy.add(OnyxLuxPolicy.MAIN, time, lux, now());
++        scheduleUpdate();
++        return accepted;
++    }
++
++    void mainLightSensorRegistered(Sensor sensor) {
++        mMainSampleTime.registered(now(),
++                sensor.getReportingMode() == Sensor.REPORTING_MODE_ON_CHANGE);
++    }
++
++    long mainLightSampleTime(long time, float lux) {
++        return mEnabled ? mMainSampleTime.normalize(time, lux, now())
++                : OnyxLuxPolicy.SampleTime.INVALID;
++    }
++
++    boolean shouldUseFastRate() {
++        return mEnabled && (now() < mFastChangeUntil || mPolicy.inFastWindow(now()));
++    }
++
++    boolean shouldUseFastRate(float currentNits, float targetNits) {
++        long time = now();
++        return mEnabled && mFastRateState.shouldUse(time, mPolicy.inFastWindow(time),
++                currentNits, targetNits);
++    }
++
++    float brighteningThreshold(float lux) { return mPolicy.brighteningThreshold(lux); }
++    float darkeningThreshold(float lux) { return mPolicy.darkeningThreshold(lux); }
++
++    private long now() { return mClock.getSensorEventScaleTime(); }
++
++    private void scheduleUpdate() {
++        mHandler.removeCallbacks(mUpdate);
++        long sensorTime = mPolicy.update(now());
++        if (sensorTime != Long.MAX_VALUE && mEnabled) {
++            mHandler.postAtTime(mUpdate, sensorTime - now() + mClock.uptimeMillis());
++        }
++    }
++
++    private final Runnable mUpdate = this::scheduleUpdate;
++
++    private final SensorEventListener mAssistListener = new SensorEventListener() {
++        @Override
++        public void onSensorChanged(SensorEvent event) {
++            if (!mEnabled || event.values.length == 0) return;
++            long now = now();
++            long time = mAssistSampleTime.normalize(
++                    TimeUnit.NANOSECONDS.toMillis(event.timestamp), event.values[0], now);
++            if (time == OnyxLuxPolicy.SampleTime.INVALID) return;
++            mPolicy.add(OnyxLuxPolicy.ASSIST, time, event.values[0], now);
++            scheduleUpdate();
++        }
++
++        @Override
++        public void onAccuracyChanged(Sensor sensor, int accuracy) { }
++    };
++
++    private final SensorEventListener mPocketListener = new SensorEventListener() {
++        @Override
++        public void onSensorChanged(SensorEvent event) {
++            if (!mEnabled || event.values.length == 0 || !Float.isFinite(event.values[0])) return;
++            if (event.values[0] != mPocketValue) {
++                mPocketValue = event.values[0];
++                if (mPocketValue == 0) mPolicy.pocketExited(now());
++            }
++        }
++
++        @Override
++        public void onAccuracyChanged(Sensor sensor, int accuracy) { }
++    };
++
++    private void findExcludedTorchCameras() {
++        if (mCameraManager == null) return;
++        try {
++            for (String id : mCameraManager.getCameraIdList()) {
++                CameraCharacteristics characteristics = mCameraManager.getCameraCharacteristics(id);
++                for (String tag : CAMERA_ROLE_TAGS) {
++                    Integer[] roles;
++                    try {
++                        roles = characteristics.get(new CameraCharacteristics.Key<>(tag,
++                                Integer[].class));
++                    } catch (IllegalArgumentException e) {
++                        continue;
++                    }
++                    if (roles == null) continue;
++                    boolean excluded = false;
++                    for (Integer role : roles) {
++                        if (role != null && (role == 100 || role == 101 || role == 102)) {
++                            excluded = true;
++                        }
++                    }
++                    mExcludedTorchCameras.put(id, excluded);
++                    break;
++                }
++            }
++        } catch (CameraAccessException | IllegalArgumentException e) {
++            Slog.w(TAG, "Unable to enumerate torch cameras", e);
++        }
++    }
++
++    private final CameraManager.TorchCallback mTorchCallback = new CameraManager.TorchCallback() {
++        @Override
++        public void onTorchModeChanged(String cameraId, boolean enabled) {
++            if (!Boolean.TRUE.equals(mExcludedTorchCameras.get(cameraId))) {
++                updateTorch(cameraId, enabled);
++            }
++        }
++
++        @Override
++        public void onTorchModeUnavailable(String cameraId) {
++            // Stock treats an unavailable rear flash as potentially contaminating the rear ALS.
++            if (!mStopped) {
++                mPolicy.setTorch(true, now());
++                scheduleUpdate();
++            }
++        }
++    };
++
++    private void updateTorch(String cameraId, boolean torch) {
++        if (mStopped) return;
++        mTorchStates.put(cameraId, torch);
++        boolean anyTorch = false;
++        for (boolean state : mTorchStates.values()) anyTorch |= state;
++        mPolicy.setTorch(anyTorch, now());
++        scheduleUpdate();
++    }
++
++    @SuppressWarnings("deprecation")
++    private void startTouchTracking() {
++        if (mConfig.touchRect.isEmpty()) return;
++        InputManager inputManager = mContext.getSystemService(InputManager.class);
++        if (inputManager == null || mDisplayManager == null) return;
++        try {
++            mInputMonitor = inputManager.monitorGestureInput(TAG, Display.DEFAULT_DISPLAY);
++            mInputReceiver = new InputEventReceiver(mInputMonitor.getInputChannel(),
++                    mHandler.getLooper()) {
++                @Override
++                public void onInputEvent(InputEvent event) {
++                    try {
++                        if (mEnabled && event instanceof MotionEvent motion
++                                && motion.isTouchEvent()) onTouch(motion);
++                    } finally {
++                        finishInputEvent(event, false);
++                    }
++                }
++            };
++        } catch (RuntimeException e) {
++            Slog.w(TAG, "Unable to monitor ALS cover touches", e);
++            if (mInputMonitor != null) mInputMonitor.dispose();
++            mInputMonitor = null;
++        }
++    }
++
++    private void onTouch(MotionEvent event) {
++        updateTouchRect();
++        boolean touching = false;
++        int action = event.getActionMasked();
++        if (action != MotionEvent.ACTION_UP && action != MotionEvent.ACTION_CANCEL) {
++            for (int i = 0; i < event.getPointerCount(); i++) {
++                if (action == MotionEvent.ACTION_POINTER_UP && i == event.getActionIndex()) continue;
++                if (mTouchRect.contains(Math.round(event.getX(i)), Math.round(event.getY(i)))) {
++                    touching = true;
++                    break;
++                }
++            }
++        }
++        mPolicy.setTouch(touching, now(), mConfig.touchDebounce);
++        scheduleUpdate();
++    }
++
++    private void updateTouchRect() {
++        mTouchRect.setEmpty();
++        Display display = mDisplayManager.getDisplay(Display.DEFAULT_DISPLAY);
++        if (display == null) return;
++        DisplayInfo info = new DisplayInfo();
++        if (!display.getDisplayInfo(info)) return;
++        // The stock rectangle is in native panel pixels and protects only landscape rotations.
++        int physicalWidth = display.getMode().getPhysicalWidth();
++        int physicalHeight = display.getMode().getPhysicalHeight();
++        Rect border = mConfig.touchRect;
++        if (info.rotation == Surface.ROTATION_90) {
++            mTouchRect.set(border.top, physicalWidth - border.right, border.bottom,
++                    physicalWidth - border.left);
++        } else if (info.rotation == Surface.ROTATION_270) {
++            mTouchRect.set(physicalHeight - border.bottom, border.left,
++                    physicalHeight - border.top, border.right);
++        } else {
++            return;
++        }
++        mTouchRect.scale((float) info.logicalHeight / physicalWidth);
++    }
++
++    void dump(PrintWriter writer) {
++        writer.println("  Onyx sensors: assist=" + mAssistSensor + ", pocket=" + mPocketSensor
++                + ", assistRegistered=" + mAssistRegistered + ", pocketRegistered="
++                + mPocketRegistered + ", touchMonitoring=" + (mInputMonitor != null));
++        mPolicy.dump(writer);
++    }
++}
+diff --git a/services/core/java/com/android/server/display/OnyxLuxPolicy.java b/services/core/java/com/android/server/display/OnyxLuxPolicy.java
+new file mode 100644
+index 000000000..9f3d76562
+--- /dev/null
++++ b/services/core/java/com/android/server/display/OnyxLuxPolicy.java
+@@ -0,0 +1,499 @@
++/*
++ * Copyright (C) 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.server.display;
++
++import java.io.PrintWriter;
++import java.util.ArrayList;
++
++/**
++ * Onyx's two independent ALS histories, absolute hysteresis and selection policy.
++ *
++ * <p>Times, including protection deadlines, are milliseconds on one monotonic sensor clock.
++ * This class has no Android dependencies so recorded light traces can exercise the policy.
++ * The equations and anchors are from the shipped Onyx 303/305 display services and resources.
++ */
++final class OnyxLuxPolicy {
++    static final int MAIN = 0;
++    static final int ASSIST = 1;
++    static final int NONE = -1;
++    private static final long HISTORY_MILLIS = 5000;
++
++    interface Listener {
++        void onAmbientLux(float lux, float fastLux, float slowLux, boolean fastChange);
++    }
++
++    /** The adapter uses this only for an on-change sensor's initial cached observation. */
++    static final class SampleTime {
++        static final long INVALID = Long.MIN_VALUE;
++        private long mRegistrationTime;
++        private boolean mInitialOnChange;
++
++        void registered(long time, boolean onChange) {
++            mRegistrationTime = time;
++            mInitialOnChange = onChange;
++        }
++
++        void clear() {
++            mInitialOnChange = false;
++        }
++
++        long normalize(long time, float lux, long now) {
++            if (!Float.isFinite(lux) || lux < 0 || time < 0 || time > now) return INVALID;
++            if (mInitialOnChange) {
++                mInitialOnChange = false;
++                // SensorService sends the current cached value when an on-change sensor is
++                // registered. Its hardware timestamp can predate registration by minutes if
++                // the light has not changed. It is an initial observation, not queued history.
++                if (time < mRegistrationTime) return now;
++            }
++            return time;
++        }
++    }
++
++    /** Stock first-auto latch and the two nits gates for later fast changes. */
++    static final class FastRateState {
++        private boolean mFirst = true;
++        private long mFirstUntil = Long.MIN_VALUE;
++        private float mFirstTarget = Float.NaN;
++        private long mFastUntil = Long.MIN_VALUE;
++        private float mFastTarget = Float.NaN;
++
++        void reset() {
++            reset(true);
++        }
++
++        void reset(boolean firstAutoBrightness) {
++            mFirst = firstAutoBrightness;
++            mFirstUntil = Long.MIN_VALUE;
++            mFirstTarget = Float.NaN;
++            mFastUntil = Long.MIN_VALUE;
++            mFastTarget = Float.NaN;
++        }
++
++        void ambientUpdated(long now) {
++            if (mFirst) {
++                mFirst = false;
++                mFirstUntil = now + 2000;
++            }
++        }
++
++        boolean shouldUse(long now, boolean fastWindow, float currentNits, float targetNits) {
++            if (!Float.isFinite(currentNits) || !Float.isFinite(targetNits)
++                    || currentNits < 0 || targetNits < 0) return false;
++            if (now < mFirstUntil) {
++                if (!Float.isFinite(mFirstTarget)) mFirstTarget = targetNits;
++                if (targetNits < mFirstTarget
++                        || targetNits > mFirstTarget && currentNits >= mFirstTarget) {
++                    mFirstUntil = Long.MIN_VALUE;
++                } else {
++                    return true;
++                }
++            }
++            if (now < mFastUntil && Float.isFinite(mFastTarget)) {
++                if (targetNits < mFastTarget
++                        || targetNits > mFastTarget && currentNits >= mFastTarget) {
++                    mFastTarget = Float.NaN;
++                    mFastUntil = Long.MIN_VALUE;
++                } else {
++                    return true;
++                }
++            }
++            if (fastWindow && targetNits >= currentNits + 55.5f
++                    && targetNits >= currentNits * 1.6f) {
++                mFastTarget = targetNits;
++                mFastUntil = now + 2000;
++                return true;
++            }
++            return false;
++        }
++    }
++
++    static final class Thresholds {
++        static final float[] STOCK_BRIGHT_LUX = {0, 3, 4, 6, 7, 8, 9, 15, 30, 600,
++                1677.4f, 2000, 2500, 3000, 8500};
++        static final float[] STOCK_BRIGHT = {2, 6, 8.51f, 13.66f, 14.84f, 15.46f, 17.22f,
++                28.44f, 160, 992.58f, 3000, 4038.77f, 5738.77f, 7538.77f, 13038.8f};
++        static final float[] STOCK_DARK_LUX = {0, 1, 7, 8, 9, 10, 11, 12, 13, 14, 15, 30,
++                199, 200, 360, 600, 1010.47f, 3000, 20000};
++        static final float[] STOCK_DARK = {0, .32f, 3.53f, 3.8f, 4.1f, 4.45f, 4.82f, 5.2f,
++                5.58f, 6.05f, 6.9f, 15.83f, 34.31f, 41.39f, 45.34f, 216.99f, 600,
++                2052.56f, 10012};
++        private final float[] mBrightLux;
++        private final float[] mBright;
++        private final float[] mSmallBright;
++        private final float[] mDarkLux;
++        private final float[] mDark;
++        private final float mHbmMinimumLux;
++
++        Thresholds(float[] brightLux, float[] bright, float[] darkLux, float[] dark,
++                float smallRatio, float hbmMinimumLux) {
++            validate(brightLux, bright);
++            validate(darkLux, dark);
++            if (!Float.isFinite(smallRatio) || smallRatio < 0 || smallRatio > 1
++                    || !Float.isFinite(hbmMinimumLux) || hbmMinimumLux < 0) {
++                throw new IllegalArgumentException("Invalid Onyx hysteresis configuration");
++            }
++            mBrightLux = brightLux.clone();
++            mBright = bright.clone();
++            mDarkLux = darkLux.clone();
++            mDark = dark.clone();
++            mHbmMinimumLux = hbmMinimumLux;
++            mSmallBright = new float[bright.length];
++            for (int i = 0; i < bright.length; i++) {
++                mSmallBright[i] = brightLux[i] <= 10 ? bright[i]
++                        : Math.max(bright[i] * smallRatio + brightLux[i] * (1 - smallRatio),
++                                i == 0 ? bright[i] : bright[i - 1]);
++            }
++        }
++
++        static Thresholds stock(float hbmMinimumLux) {
++            return new Thresholds(STOCK_BRIGHT_LUX, STOCK_BRIGHT, STOCK_DARK_LUX, STOCK_DARK,
++                    .6f, hbmMinimumLux);
++        }
++
++        float bright(float lux) {
++            return lux > mHbmMinimumLux ? lux + 1 : interpolate(mBrightLux, mBright, lux);
++        }
++
++        float smallBright(float lux) {
++            return lux > mHbmMinimumLux ? lux + 1 : interpolate(mBrightLux, mSmallBright, lux);
++        }
++
++        float dark(float lux) {
++            return interpolate(mDarkLux, mDark, lux);
++        }
++
++        private static void validate(float[] x, float[] y) {
++            if (x == null || y == null || x.length < 2 || x.length != y.length) {
++                throw new IllegalArgumentException("Mismatched Onyx hysteresis arrays");
++            }
++            for (int i = 0; i < x.length; i++) {
++                if (!Float.isFinite(x[i]) || !Float.isFinite(y[i]) || x[i] < 0 || y[i] < 0
++                        || (i > 0 && x[i] <= x[i - 1])) {
++                    throw new IllegalArgumentException("Invalid Onyx hysteresis anchor");
++                }
++            }
++        }
++
++        private static float interpolate(float[] x, float[] y, float value) {
++            if (value <= x[0]) return y[0];
++            for (int i = 1; i < x.length; i++) {
++                if (value <= x[i]) {
++                    float t = (value - x[i - 1]) / (x[i] - x[i - 1]);
++                    return y[i - 1] + t * (y[i] - y[i - 1]);
++                }
++            }
++            return y[y.length - 1];
++        }
++    }
++
++    /** Time-weighted integration, with the same 100ms prediction as stock. */
++    static final class History {
++        private final ArrayList<Sample> mSamples = new ArrayList<>();
++        private final int mLongHorizon;
++        private long mLastTime = Long.MIN_VALUE;
++
++        History(int longHorizon) {
++            mLongHorizon = longHorizon;
++        }
++
++        boolean push(long time, float lux) {
++            if (!Float.isFinite(lux) || lux < 0 || time < mLastTime) return false;
++            prune(time);
++            mSamples.add(new Sample(time, lux));
++            mLastTime = time;
++            return true;
++        }
++
++        void prune(long now) {
++            long cutoff = now - HISTORY_MILLIS;
++            while (mSamples.size() > 1 && mSamples.get(1).time <= cutoff) {
++                mSamples.remove(0);
++            }
++            if (!mSamples.isEmpty() && mSamples.get(0).time < cutoff) {
++                mSamples.get(0).time = cutoff;
++            }
++        }
++
++        boolean hasReading() {
++            return !mSamples.isEmpty();
++        }
++
++        float lux(long now, int horizon) {
++            if (mSamples.isEmpty()) return -1;
++            int first = 0;
++            long cutoff = now - horizon;
++            while (first + 1 < mSamples.size() && mSamples.get(first + 1).time <= cutoff) first++;
++            float sum = 0;
++            float total = 0;
++            long end = 100;
++            for (int i = mSamples.size() - 1; i >= first; i--) {
++                Sample sample = mSamples.get(i);
++                long start = Math.max(sample.time, cutoff) - now;
++                float weight = integral(end) - integral(start);
++                sum += sample.lux * weight;
++                total += weight;
++                end = start;
++            }
++            return total > 0 ? sum / total : mSamples.get(mSamples.size() - 1).lux;
++        }
++
++        long transition(long now, float threshold, long debounce, boolean brighten) {
++            long earliest = now;
++            for (int i = mSamples.size() - 1; i >= 0; i--) {
++                Sample sample = mSamples.get(i);
++                if (brighten ? sample.lux <= threshold : sample.lux >= threshold) break;
++                earliest = sample.time;
++            }
++            return earliest + debounce;
++        }
++
++        void clear() {
++            mSamples.clear();
++            mLastTime = Long.MIN_VALUE;
++        }
++
++        private float integral(long time) {
++            return time * (time * .5f + mLongHorizon);
++        }
++
++        private static final class Sample {
++            long time;
++            float lux;
++            Sample(long time, float lux) {
++                this.time = time;
++                this.lux = lux;
++            }
++        }
++    }
++
++    private final History[] mHistories;
++    private final float[] mFast = {-1, -1};
++    private final float[] mSlow = {-1, -1};
++    private final float[] mBright = {-1, -1};
++    private final float[] mSmallBright = {-1, -1};
++    private final float[] mDark = {-1, -1};
++    private final boolean[] mValid = {false, false};
++    private final Thresholds mThresholds;
++    private final Listener mListener;
++    private final int mLongHorizon;
++    private final int mShortHorizon;
++    private final int mWarmUp;
++    private final int mRate;
++    private final long mBrightDebounce;
++    private final long mDarkDebounce;
++    private final long mSmallDebounce;
++    private final long mInitialFastWindow;
++    private final long mPocketFastWindow;
++    private final long mTorchCooldown;
++    private long mEnableTime;
++    private long mPocketExit = Long.MIN_VALUE;
++    private long mTorchOff = Long.MIN_VALUE;
++    private long mTouchUntil = Long.MIN_VALUE;
++    private boolean mTorch;
++    private boolean mTouch;
++    private boolean mEnabled;
++    private int mSource = NONE;
++    private float mAmbientLux = -1;
++
++    OnyxLuxPolicy(Thresholds thresholds, Listener listener, int longHorizon, int shortHorizon,
++            int warmUp, int rate, long brightDebounce, long darkDebounce, long smallDebounce,
++            long initialFastWindow, long pocketFastWindow, long torchCooldown) {
++        if (shortHorizon <= 0 || longHorizon < shortHorizon || longHorizon > HISTORY_MILLIS
++                || rate <= 0 || warmUp < 0 || brightDebounce < 0 || darkDebounce < 0
++                || smallDebounce < 0 || smallDebounce > HISTORY_MILLIS) {
++            throw new IllegalArgumentException("Invalid Onyx sensor timing");
++        }
++        mThresholds = thresholds;
++        mListener = listener;
++        mLongHorizon = longHorizon;
++        mShortHorizon = shortHorizon;
++        mWarmUp = warmUp;
++        mRate = rate;
++        mBrightDebounce = brightDebounce;
++        mDarkDebounce = darkDebounce;
++        mSmallDebounce = smallDebounce;
++        mInitialFastWindow = initialFastWindow;
++        mPocketFastWindow = pocketFastWindow;
++        mTorchCooldown = torchCooldown;
++        mHistories = new History[] {new History(longHorizon), new History(longHorizon)};
++    }
++
++    void setEnabled(boolean enabled, long now) {
++        if (mEnabled == enabled) return;
++        mEnabled = enabled;
++        mEnableTime = now;
++        mSource = NONE;
++        mAmbientLux = -1;
++        mPocketExit = Long.MIN_VALUE;
++        mTouchUntil = Long.MIN_VALUE;
++        mTouch = false;
++        for (int i = MAIN; i <= ASSIST; i++) {
++            invalidate(i);
++        }
++    }
++
++    boolean add(int sensor, long time, float lux, long now) {
++        if (!mEnabled || time < mEnableTime || time > now || now - time > HISTORY_MILLIS
++                || (sensor == MAIN && mAmbientLux >= 0 && covered(now))
++                || (sensor == ASSIST && !assistAllowed(now))) return false;
++        if (!mHistories[sensor].push(time, lux)) return false;
++        if (sensor == MAIN && mAmbientLux >= 0 && inFastWindow(now)
++                && lux >= mThresholds.bright(mAmbientLux) && lux >= mAmbientLux + 20
++                && lux >= mAmbientLux * 1.6f
++                && (mSource != ASSIST || lux >= mFast[ASSIST])) {
++            mFast[MAIN] = lux;
++            mSlow[MAIN] = lux;
++            mValid[MAIN] = true;
++            setThresholds(MAIN, lux);
++            select(MAIN, true);
++        } else {
++            update(now, sensor);
++        }
++        return true;
++    }
++
++    /** Returns the next required update on the sensor clock. */
++    long update(long now) {
++        return update(now, NONE);
++    }
++
++    private long update(long now, int event) {
++        if (!mEnabled) return Long.MAX_VALUE;
++        long next = Long.MAX_VALUE;
++        for (int sensor = MAIN; sensor <= ASSIST; sensor++) {
++            if (!mHistories[sensor].hasReading()
++                    || sensor == ASSIST && !assistAllowed(now)) continue;
++            mHistories[sensor].prune(now);
++            if (now < mEnableTime + mWarmUp) {
++                next = Math.min(next, mEnableTime + mWarmUp);
++                continue;
++            }
++            mFast[sensor] = mHistories[sensor].lux(now, mShortHorizon);
++            mSlow[sensor] = mHistories[sensor].lux(now, mLongHorizon);
++            if (!mValid[sensor]) {
++                mValid[sensor] = true;
++                setThresholds(sensor, mFast[sensor]);
++                if (mSource == NONE || (sensor == MAIN && mFast[MAIN] >= mFast[ASSIST])
++                        || (sensor == ASSIST && mFast[ASSIST] > mBright[MAIN])) {
++                    select(sensor, mSource == NONE);
++                }
++            }
++        }
++        for (int sensor = MAIN; sensor <= ASSIST; sensor++) {
++            if (!mValid[sensor] || sensor == ASSIST && !assistAllowed(now)) continue;
++            float bright = mFast[sensor] < mBright[sensor]
++                    ? mSmallBright[sensor] : mBright[sensor];
++            long brighten = mHistories[sensor].transition(now, bright,
++                    mFast[sensor] < mBright[sensor] ? mSmallDebounce : mBrightDebounce, true);
++            long darken = mHistories[sensor].transition(now, mDark[sensor], mDarkDebounce, false);
++            boolean rising = mFast[sensor] >= bright && mSlow[sensor] >= bright && brighten <= now;
++            boolean falling = mFast[sensor] <= mDark[sensor] && darken <= now;
++            // Sensor event provenance matters: the inactive history should not drive transitions
++            // until its own update/deadline, matching the stock two policy handlers.
++            if ((event == NONE || event == sensor) && (rising || falling)) {
++                if (sensor == MAIN) {
++                    if (mSource == MAIN && rising || !mValid[ASSIST]
++                            || mFast[MAIN] >= mFast[ASSIST]) {
++                        select(MAIN, false);
++                    } else if (mSource == MAIN && falling) {
++                        setThresholds(ASSIST, mFast[ASSIST]);
++                        select(ASSIST, false);
++                    }
++                    setThresholds(MAIN, mFast[MAIN]);
++                } else {
++                    if (mSource == MAIN && mSlow[ASSIST] > mBright[MAIN]
++                            && mFast[ASSIST] > mBright[MAIN]
++                            || mSource == ASSIST && mFast[ASSIST] > mFast[MAIN]) {
++                        select(ASSIST, false);
++                    } else if (mSource == ASSIST && mValid[MAIN]) {
++                        setThresholds(MAIN, mFast[MAIN]);
++                        select(MAIN, false);
++                    }
++                    setThresholds(ASSIST, mFast[ASSIST]);
++                }
++                brighten = mHistories[sensor].transition(now, mBright[sensor], mBrightDebounce, true);
++                darken = mHistories[sensor].transition(now, mDark[sensor], mDarkDebounce, false);
++            }
++            long deadline = Math.min(brighten, darken);
++            next = Math.min(next, deadline > now ? deadline : now + mRate);
++        }
++        return next;
++    }
++
++    void setTorch(boolean torch, long now) {
++        if (mTorch == torch) return;
++        mTorch = torch;
++        if (!torch) mTorchOff = now;
++    }
++
++    void setTouch(boolean touching, long now, long debounce) {
++        mTouch = touching;
++        if (touching) mTouchUntil = now + debounce;
++    }
++
++    void pocketExited(long now) {
++        if (mEnabled) mPocketExit = now;
++    }
++
++    boolean inFastWindow(long now) {
++        return mEnabled && (now <= mEnableTime + mInitialFastWindow
++                || mPocketExit != Long.MIN_VALUE && now <= mPocketExit + mPocketFastWindow);
++    }
++
++    private boolean assistAllowed(long now) {
++        return !mTorch && (mTorchOff == Long.MIN_VALUE || now - mTorchOff > mTorchCooldown);
++    }
++
++    private boolean covered(long now) {
++        return mTouch || now < mTouchUntil;
++    }
++
++    private void invalidate(int sensor) {
++        mHistories[sensor].clear();
++        mValid[sensor] = false;
++        mFast[sensor] = -1;
++        mSlow[sensor] = -1;
++    }
++
++    private void setThresholds(int sensor, float lux) {
++        mBright[sensor] = mThresholds.bright(lux);
++        mSmallBright[sensor] = mThresholds.smallBright(lux);
++        mDark[sensor] = mThresholds.dark(lux);
++    }
++
++    private void select(int sensor, boolean fastChange) {
++        mSource = sensor;
++        if (mAmbientLux != mFast[sensor]) {
++            mAmbientLux = mFast[sensor];
++            mListener.onAmbientLux(mAmbientLux, mFast[sensor], mSlow[sensor], fastChange);
++        }
++    }
++
++    float brighteningThreshold(float lux) { return mThresholds.bright(lux); }
++    float darkeningThreshold(float lux) { return mThresholds.dark(lux); }
++    int source() { return mSource; }
++    float ambientLux() { return mAmbientLux; }
++
++    void dump(PrintWriter writer) {
++        writer.println("  OnyxLuxPolicy: enabled=" + mEnabled + ", source=" + mSource
++                + ", ambientLux=" + mAmbientLux + ", mainFast=" + mFast[MAIN]
++                + ", mainSlow=" + mSlow[MAIN] + ", assistFast=" + mFast[ASSIST]
++                + ", assistSlow=" + mSlow[ASSIST] + ", torch=" + mTorch
++                + ", touch=" + mTouch + ", torchOff=" + mTorchOff);
++    }
++}
+diff --git a/services/core/java/com/android/server/display/RampAnimator.java b/services/core/java/com/android/server/display/RampAnimator.java
+index 1d8d0823f..8af8ec915 100644
+--- a/services/core/java/com/android/server/display/RampAnimator.java
++++ b/services/core/java/com/android/server/display/RampAnimator.java
+@@ -69,6 +69,14 @@ class RampAnimator<T> {
+ 
+     private boolean mFirstTime = true;
+ 
++    @Nullable
++    private OnyxBrightnessRampController.State mOnyxState;
++    @Nullable
++    private OnyxBrightnessRampController mOnyxController;
++    private float mOnyxAnimatedLinearValue;
++    private boolean mUseNativeRate;
++    private boolean mRebaseNativeBrightness;
++
+     RampAnimator(T object, FloatProperty<T> property) {
+         this(object, property, System::nanoTime);
+     }
+@@ -101,6 +109,28 @@ class RampAnimator<T> {
+         mDarkeningRampGamma = darkeningRampGamma;
+     }
+ 
++    /** Enables the opt-in Onyx equations without changing the ordinary HLG animator. */
++    void setOnyxBrightnessRampController(@Nullable OnyxBrightnessRampController controller) {
++        if (mOnyxController == controller) {
++            return;
++        }
++        mOnyxController = controller;
++        mUseNativeRate = false;
++        mOnyxState = controller == null ? null : controller.newState();
++        if (!mFirstTime) {
++            // Preserve the displayed value when a display/configuration is replaced mid-ramp.
++            float linear = mProperty.get(mObject);
++            mCurrentRampGamma = 1f;
++            mCurrentValue = BrightnessUtils.convertLinearToGamma(linear);
++            mAnimatedValue = mCurrentValue;
++            mOnyxAnimatedLinearValue = linear;
++            mTargetHlgValue = BrightnessUtils.convertLinearToGamma(mTargetLinearValue);
++            if (mOnyxState != null) {
++                mOnyxState.setTarget(linear, mTargetLinearValue, mRate, 0);
++            }
++        }
++    }
++
+     /**
+      * Sets the animation target and the rate of this ramp animator.
+      * Animation rate will be set ignoring maxTime animation limits
+@@ -117,6 +147,33 @@ class RampAnimator<T> {
+      */
+     boolean setAnimationTarget(float targetLinear, float rate, boolean ignoreAnimationLimits,
+             float luxDelta) {
++        return setAnimationTarget(targetLinear, rate, ignoreAnimationLimits, luxDelta, false);
++    }
++
++    /** Preserve explicit strategy/clamper rates in their original HLG units. */
++    boolean setAnimationTargetUsingCustomRate(float targetLinear, float rate,
++            boolean ignoreAnimationLimits, float luxDelta) {
++        return setAnimationTarget(targetLinear, rate, ignoreAnimationLimits, luxDelta, true);
++    }
++
++    private boolean setAnimationTarget(float targetLinear, float rate,
++            boolean ignoreAnimationLimits, float luxDelta, boolean useNativeRate) {
++        if (mOnyxState != null && mUseNativeRate != useNativeRate) {
++            mUseNativeRate = useNativeRate;
++            if (!mFirstTime) {
++                float linear = mProperty.get(mObject);
++                mOnyxAnimatedLinearValue = linear;
++                mCurrentRampGamma = 1f;
++                mCurrentValue = BrightnessUtils.convertLinearToGamma(linear);
++                mAnimatedValue = mCurrentValue;
++                // A rate from the other space must not participate in native rate retention.
++                mRate = 0f;
++                mRebaseNativeBrightness = useNativeRate;
++            }
++            if (!useNativeRate) {
++                mOnyxState = mOnyxController.newState();
++            }
++        }
+         float maxIncreaseTimeSecs = 0;
+         float maxDecreaseTimeSecs = 0;
+         if (!ignoreAnimationLimits) {
+@@ -136,6 +193,10 @@ class RampAnimator<T> {
+ 
+     private boolean setAnimationTarget(float targetLinear, float rate,
+             float maxIncreaseTimeSecs, float maxDecreaseTimeSecs) {
++        if (mOnyxState != null && !mUseNativeRate) {
++            return setOnyxAnimationTarget(targetLinear, rate, maxIncreaseTimeSecs,
++                    maxDecreaseTimeSecs);
++        }
+         mCurrentRampGamma = targetLinear > BrightnessUtils.convertGammaToLinear(mCurrentValue)
+                 ? mBrighteningRampGamma : mDarkeningRampGamma;
+         final float target;
+@@ -147,6 +208,12 @@ class RampAnimator<T> {
+             mCurrentRampGamma = 1.0f;
+             target = BrightnessUtils.convertLinearToGamma(targetLinear);
+         }
++        if (mRebaseNativeBrightness) {
++            mRebaseNativeBrightness = false;
++            mCurrentValue = BrightnessUtils.convertLinearToGamma((float) Math.pow(
++                    mOnyxAnimatedLinearValue, 1f / mCurrentRampGamma));
++            mAnimatedValue = mCurrentValue;
++        }
+ 
+         // Immediately jump to the target the first time.
+         if (mFirstTime || rate <= 0) {
+@@ -200,6 +267,39 @@ class RampAnimator<T> {
+         return changed;
+     }
+ 
++    private boolean setOnyxAnimationTarget(float targetLinear, float rate,
++            float maxIncreaseTimeSecs, float maxDecreaseTimeSecs) {
++        final float current = mFirstTime ? 0f : mOnyxAnimatedLinearValue;
++        final boolean changed = mFirstTime || mTargetLinearValue != targetLinear;
++        mCurrentRampGamma = 1f;
++        mTargetLinearValue = targetLinear;
++        mTargetHlgValue = BrightnessUtils.convertLinearToGamma(targetLinear);
++
++        // Keep Android's first-value, skip-ramp, screen-off, and zero-brightness behavior.
++        if (mFirstTime || rate <= 0 || current == 0 || targetLinear == 0) {
++            mFirstTime = false;
++            mRate = 0;
++            mCurrentValue = mTargetHlgValue;
++            mAnimatedValue = mCurrentValue;
++            mOnyxAnimatedLinearValue = targetLinear;
++            mOnyxState.setTarget(targetLinear, targetLinear, rate, 0);
++            mAnimating = false;
++            if (changed || current != targetLinear) {
++                setPropertyValue(mCurrentValue);
++            }
++            return changed || current != targetLinear;
++        }
++
++        float maxTime = targetLinear > current ? maxIncreaseTimeSecs : maxDecreaseTimeSecs;
++        mOnyxState.setTarget(current, targetLinear, rate, maxTime);
++        mRate = mOnyxState.getRate(current);
++        if (!mAnimating && current != targetLinear) {
++            mAnimating = true;
++            mLastFrameTimeNanos = mClock.nanoTime();
++        }
++        return changed;
++    }
++
+     /**
+      * Returns true if the animation is running.
+      */
+@@ -232,6 +332,30 @@ class RampAnimator<T> {
+         // we keep the animated value around to allow for fractional increments
+         // towards the target.
+         final float scale = ValueAnimator.getDurationScale();
++        if (mOnyxState != null && !mUseNativeRate) {
++            // The vendor equations describe linear brightness rates. Applying them to HLG
++            // would change both the curve and the effective duration.
++            float previous = mOnyxAnimatedLinearValue;
++            mRate = mOnyxState.getRate(previous);
++            mOnyxAnimatedLinearValue = scale == 0 ? mTargetLinearValue
++                    : mOnyxState.advance(previous, Math.abs(timeDelta), scale);
++            mCurrentValue = BrightnessUtils.convertLinearToGamma(mOnyxAnimatedLinearValue);
++            mAnimatedValue = mCurrentValue;
++            if (previous != mOnyxAnimatedLinearValue
++                    && (OnyxBrightnessRampController.brightnessToInt(previous)
++                            != OnyxBrightnessRampController.brightnessToInt(
++                                    mOnyxAnimatedLinearValue)
++                            || mOnyxAnimatedLinearValue == mTargetLinearValue)) {
++                // Keep the original linear value, including the exact final target; an HLG
++                // round trip can otherwise perturb the fine stock 14-bit brightness steps.
++                // Like stock, retain fractional progress without issuing sub-DBV writes.
++                mProperty.setValue(mObject, mOnyxAnimatedLinearValue);
++            }
++            if (mOnyxAnimatedLinearValue == mTargetLinearValue) {
++                mAnimating = false;
++            }
++            return;
++        }
+         if (scale == 0) {
+             // Animation off.
+             mAnimatedValue = mTargetHlgValue;
+@@ -279,6 +403,13 @@ class RampAnimator<T> {
+             mSecond = new RampAnimator<>(object, secondProperty);
+         }
+ 
++        /** Attach only on displays whose resource overlay explicitly enables the stock port. */
++        public void setOnyxBrightnessRampController(
++                @Nullable OnyxBrightnessRampController controller) {
++            mFirst.setOnyxBrightnessRampController(controller);
++            mSecond.setOnyxBrightnessRampController(controller);
++        }
++
+         /**
+          * Sets the maximum time that a brightness animation can take.
+          */
+@@ -318,10 +449,23 @@ class RampAnimator<T> {
+          */
+         public boolean animateTo(float linearFirstTarget, float linearSecondTarget, float rate,
+                 boolean ignoreAnimationLimits, float luxDelta) {
++            return animateTo(linearFirstTarget, linearSecondTarget, rate, ignoreAnimationLimits,
++                    luxDelta, false);
++        }
++
++        /** Explicit Android strategy/clamper rates keep native HLG and ramp-gamma semantics. */
++        public boolean animateToWithCustomRate(float linearFirstTarget, float linearSecondTarget,
++                float rate, boolean ignoreAnimationLimits, float luxDelta) {
++            return animateTo(linearFirstTarget, linearSecondTarget, rate, ignoreAnimationLimits,
++                    luxDelta, true);
++        }
++
++        private boolean animateTo(float linearFirstTarget, float linearSecondTarget, float rate,
++                boolean ignoreAnimationLimits, float luxDelta, boolean useNativeRate) {
+             boolean animationTargetChanged = mFirst.setAnimationTarget(linearFirstTarget, rate,
+-                    ignoreAnimationLimits, luxDelta);
++                    ignoreAnimationLimits, luxDelta, useNativeRate);
+             animationTargetChanged |= mSecond.setAnimationTarget(linearSecondTarget, rate,
+-                    ignoreAnimationLimits, luxDelta);
++                    ignoreAnimationLimits, luxDelta, useNativeRate);
+             boolean shouldBeAnimating = isAnimating();
+ 
+             if (shouldBeAnimating != mAwaitingCallback) {
