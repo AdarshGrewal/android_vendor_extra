@@ -1,0 +1,316 @@
+From 93c4931e693cd4229ae07a141afa174d769f1fd4 Mon Sep 17 00:00:00 2001
+From: Loukious <24696530+Loukious@users.noreply.github.com>
+Date: Mon, 16 Nov 2026 01:55:11 +0100
+Subject: [PATCH] SystemUI: Exclude QS from lockscreen sleep gestures
+
+QS and shade contacts reach sleep detectors while keyguard remains visible. Require both taps to stay on a valid sleep surface and cancel pending detector state when shade or QS takes ownership.
+
+Use normalized legacy shade/QS expansion so bare keyguard remains eligible. For scene keyguard, require idle Lockscreen with no overlays and recheck that state before sleeping.
+---
+ .../TouchHandlingViewInteractionHandler.kt    | 15 +++++
+ .../KeyguardTouchHandlingInteractor.kt        | 31 ++++++++-
+ .../NotificationPanelViewController.java      | 38 ++++++++++-
+ .../systemui/shade/QQSGestureListener.kt      | 63 ++++++++++++++-----
+ 4 files changed, 128 insertions(+), 19 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/common/ui/view/TouchHandlingViewInteractionHandler.kt b/packages/SystemUI/src/com/android/systemui/common/ui/view/TouchHandlingViewInteractionHandler.kt
+index 01fd930..46b492c 100644
+--- a/packages/SystemUI/src/com/android/systemui/common/ui/view/TouchHandlingViewInteractionHandler.kt
++++ b/packages/SystemUI/src/com/android/systemui/common/ui/view/TouchHandlingViewInteractionHandler.kt
+@@ -20,6 +20,7 @@ package com.android.systemui.common.ui.view
+ import android.companion.virtualdevice.flags.Flags
+ import android.content.Context
+ import android.graphics.Point
++import android.os.SystemClock
+ import android.view.GestureDetector
+ import android.view.MotionEvent
+ import android.view.ViewConfiguration
+@@ -69,6 +70,20 @@ class TouchHandlingViewInteractionHandler(
+ 
+     var isLongPressHandlingEnabled: Boolean = false
+     var isDoubleTapHandlingEnabled: Boolean = false
++        set(value) {
++            if (field == value) return
++            field = value
++            if (!value) {
++                // Disabling lockscreen gestures transfers touch ownership to another surface.
++                // Do not join taps across that boundary when the lockscreen becomes eligible.
++                doubleTapAwaitingUp = false
++                lastDoubleTapDownEventTime = null
++                val now = SystemClock.uptimeMillis()
++                val cancel = MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
++                gestureDetector.onTouchEvent(cancel)
++                cancel.recycle()
++            }
++        }
+     var scheduledLongPressHandle: DisposableHandle? = null
+ 
+     private var doubleTapAwaitingUp: Boolean = false
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardTouchHandlingInteractor.kt b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardTouchHandlingInteractor.kt
+index d2d5cc5..32ddcc6 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardTouchHandlingInteractor.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/domain/interactor/KeyguardTouchHandlingInteractor.kt
+@@ -28,6 +28,7 @@ import android.util.Log
+ import android.view.accessibility.AccessibilityManager
+ import androidx.annotation.VisibleForTesting
+ import com.android.app.tracing.coroutines.launchTraced as launch
++import com.android.compose.animation.scene.ObservableTransitionState
+ import com.android.internal.logging.UiEvent
+ import com.android.internal.logging.UiEventLogger
+ import com.android.systemui.Flags.doubleTapToSleep
+@@ -41,7 +42,9 @@ import com.android.systemui.keyguard.data.repository.KeyguardRepository
+ import com.android.systemui.keyguard.shared.model.KeyguardState
+ import com.android.systemui.power.domain.interactor.PowerInteractor
+ import com.android.systemui.res.R
++import com.android.systemui.scene.domain.interactor.SceneInteractor
+ import com.android.systemui.scene.shared.flag.SceneContainerFlag
++import com.android.systemui.scene.shared.model.Scenes
+ import com.android.systemui.securelockdevice.domain.interactor.SecureLockDeviceInteractor
+ import com.android.systemui.shade.PulsingGestureListener
+ import com.android.systemui.shade.ShadeDisplayAware
+@@ -65,6 +68,7 @@ import kotlinx.coroutines.flow.combine
+ import kotlinx.coroutines.flow.flatMapLatest
+ import kotlinx.coroutines.flow.flowOf
+ import kotlinx.coroutines.flow.launchIn
++import kotlinx.coroutines.flow.map
+ import kotlinx.coroutines.flow.onEach
+ import kotlinx.coroutines.flow.stateIn
+ 
+@@ -91,6 +95,7 @@ constructor(
+     private val pointerDeviceRepository: PointerDeviceRepository,
+     private val wallpaperFocalAreaInteractor: WallpaperFocalAreaInteractor,
+     secureLockDeviceInteractor: Lazy<SecureLockDeviceInteractor>,
++    private val sceneInteractor: Lazy<SceneInteractor>,
+ ) {
+     private val _udfpsAccessibilityOverlayBounds: MutableStateFlow<Rect?> = MutableStateFlow(null)
+ 
+@@ -126,6 +131,18 @@ constructor(
+                 initialValue = false,
+             )
+ 
++    /** Whether the scene container is showing only the idle lock screen. */
++    private fun isSceneLockscreenIdle(): Flow<Boolean> {
++        if (!SceneContainerFlag.isEnabled) {
++            return flowOf(true)
++        }
++        // The legacy QS visibility flag does not cover scene-based shade overlays.
++        return sceneInteractor.get().transitionStateFlow.map { state ->
++            state is ObservableTransitionState.Idle &&
++                state.currentScene == Scenes.Lockscreen && state.currentOverlays.isEmpty()
++        }
++    }
++
+     /** Whether the double tap handling handling feature should be enabled. */
+     val isDoubleTapHandlingEnabled: StateFlow<Boolean> =
+         if (isDoubleTapFeatureEnabled()) {
+@@ -134,15 +151,18 @@ constructor(
+                     repository.isQuickSettingsVisible,
+                     isDoubleTapSettingEnabled(),
+                     secureLockDeviceInteractor.get().isSecureLockDeviceEnabled,
++                    isSceneLockscreenIdle(),
+                 ) {
+                     isFullyTransitionedToLockScreen,
+                     isQuickSettingsVisible,
+                     isDoubleTapSettingEnabled,
+-                    isSecureLockDeviceEnabled ->
++                    isSecureLockDeviceEnabled,
++                    isSceneLockscreenIdle ->
+                     isFullyTransitionedToLockScreen == 1f &&
+                         !isQuickSettingsVisible &&
+                         isDoubleTapSettingEnabled &&
+-                        !isSecureLockDeviceEnabled
++                        !isSecureLockDeviceEnabled &&
++                        isSceneLockscreenIdle
+                 }
+             } else {
+                 flowOf(false)
+@@ -265,7 +285,12 @@ constructor(
+ 
+     /** Notifies that the lockscreen has been double clicked. */
+     fun onDoubleClick() {
+-        if (isDoubleTapHandlingEnabled.value) {
++        // Recheck the scene directly before sleeping, since its collected state may lag.
++        val isSceneLockscreenIdle = !SceneContainerFlag.isEnabled ||
++            sceneInteractor.get().transitionState.run {
++                isIdle(Scenes.Lockscreen) && currentOverlays.isEmpty()
++            }
++        if (isDoubleTapHandlingEnabled.value && isSceneLockscreenIdle) {
+             Log.d(TAG, "going to sleep due to double tap")
+             powerManager.goToSleep(systemClock.uptimeMillis())
+         } else {
+diff --git a/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java b/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java
+index 90f9eeb..3850b30 100644
+--- a/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java
++++ b/packages/SystemUI/src/com/android/systemui/shade/NotificationPanelViewController.java
+@@ -482,6 +482,7 @@ public final class NotificationPanelViewController implements
+     private final int mDisplayId;
+     private boolean mDoubleTapToSleepEnabled;
+     private GestureDetector mDoubleTapGesture;
++    private boolean mSleepGestureAllowedForTouch;
+ 
+     private final KeyguardIndicationController mKeyguardIndicationController;
+     private int mHeadsUpInset;
+@@ -791,6 +792,9 @@ public final class NotificationPanelViewController implements
+                 new GestureDetector.SimpleOnGestureListener() {
+             @Override
+             public boolean onDoubleTap(MotionEvent e) {
++                if (!mSleepGestureAllowedForTouch || !isSleepGestureAllowed()) {
++                    return false;
++                }
+                 if (mPowerManager != null) {
+                     mPowerManager.goToSleep(e.getEventTime());
+                 }
+@@ -3806,6 +3810,24 @@ public final class NotificationPanelViewController implements
+         return mStatusBarStateListener;
+     }
+ 
++    private boolean isSleepGestureAllowed() {
++        // A bare legacy keyguard has an expanded panel height. Its normalized shade amount,
++        // unlike that panel height, is zero until the notification shade is dragged down.
++        return !mPulsing && !mDozing && !mCentralSurfaces.isBouncerShowing()
++                && mShadeRepository.getQsExpansion().getValue() <= 0f
++                && (isKeyguardShowing()
++                        ? mShadeRepository.getLockscreenShadeExpansion().getValue() <= 0f
++                        : isFullyCollapsed());
++    }
++
++    private void cancelSleepGesture(MotionEvent event) {
++        mSleepGestureAllowedForTouch = false;
++        MotionEvent cancel = MotionEvent.obtain(event);
++        cancel.setAction(MotionEvent.ACTION_CANCEL);
++        mDoubleTapGesture.onTouchEvent(cancel);
++        cancel.recycle();
++    }
++
+     /** Handles MotionEvents for the Shade. */
+     public final class TouchHandler implements View.OnTouchListener, Gefingerpoken {
+         private long mLastTouchDownTime = -1L;
+@@ -3824,6 +3846,10 @@ public final class NotificationPanelViewController implements
+                 return false;
+             }
+ 
++            if (!isSleepGestureAllowed()) {
++                cancelSleepGesture(event);
++            }
++
+             // Logging every motion event is very costly, even when tracing/logcat
+             // endpoints are disabled. Uncomment the following line if full touch
+             // event history is needed.
+@@ -4030,8 +4056,16 @@ public final class NotificationPanelViewController implements
+                 return false;
+             }
+ 
+-            if (mDoubleTapToSleepEnabled && !mPulsing && !mDozing) {
+-                mDoubleTapGesture.onTouchEvent(event);
++            if (mDoubleTapToSleepEnabled) {
++                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
++                    mSleepGestureAllowedForTouch = isSleepGestureAllowed();
++                }
++                mSleepGestureAllowedForTouch &= isSleepGestureAllowed();
++                if (mSleepGestureAllowedForTouch) {
++                    mDoubleTapGesture.onTouchEvent(event);
++                } else {
++                    cancelSleepGesture(event);
++                }
+             }
+ 
+             // Make sure the next touch won't the blocked after the current ends.
+diff --git a/packages/SystemUI/src/com/android/systemui/shade/QQSGestureListener.kt b/packages/SystemUI/src/com/android/systemui/shade/QQSGestureListener.kt
+index 1d241de..7f3a505 100644
+--- a/packages/SystemUI/src/com/android/systemui/shade/QQSGestureListener.kt
++++ b/packages/SystemUI/src/com/android/systemui/shade/QQSGestureListener.kt
+@@ -24,8 +24,10 @@ import android.view.MotionEvent
+ import com.android.systemui.dagger.SysUISingleton
+ import com.android.systemui.plugins.FalsingManager
+ import com.android.systemui.plugins.statusbar.StatusBarStateController
++import com.android.systemui.shade.domain.interactor.ShadeInteractor
+ import com.android.systemui.statusbar.StatusBarState
+ import com.android.systemui.statusbar.phone.CentralSurfaces
++import dagger.Lazy
+ import lineageos.providers.LineageSettings
+ import javax.inject.Inject
+ 
+@@ -36,10 +38,13 @@ class QQSGestureListener @Inject constructor(
+         private val powerManager: PowerManager,
+         private val statusBarStateController: StatusBarStateController,
+         private val centralSurfaces: CentralSurfaces,
++        private val shadeInteractor: Lazy<ShadeInteractor>,
+ ) : GestureDetector.SimpleOnGestureListener() {
+ 
+     private var doubleTapToSleepEnabled = false
+     private val quickQsOffsetHeight: Int
++    private var tapStartedOnSleepSurface = false
++    private var doubleTapStartedOnSleepSurface = false
+ 
+     init {
+         val contentObserver = object : ContentObserver(null) {
+@@ -59,22 +64,52 @@ class QQSGestureListener @Inject constructor(
+                 com.android.internal.R.dimen.quick_qs_offset_height)
+     }
+ 
++    override fun onDown(e: MotionEvent): Boolean {
++        tapStartedOnSleepSurface = isSleepSurface(e)
++        return false
++    }
++
++    override fun onSingleTapUp(e: MotionEvent): Boolean {
++        tapStartedOnSleepSurface = tapStartedOnSleepSurface && isSleepSurface(e)
++        return false
++    }
++
++    override fun onDoubleTap(e: MotionEvent): Boolean {
++        // GestureDetector reports this before onDown for the second tap.
++        doubleTapStartedOnSleepSurface = tapStartedOnSleepSurface && isSleepSurface(e)
++        return false
++    }
++
+     override fun onDoubleTapEvent(e: MotionEvent): Boolean {
+-        // Go to sleep when double tapping the QQS status bar
+-        // or lockscreen (keyguard showing, but not bouncer)
+-        if (
+-            e.actionMasked == MotionEvent.ACTION_UP &&
+-                !statusBarStateController.isDozing &&
+-                doubleTapToSleepEnabled &&
+-                (e.getY() < quickQsOffsetHeight ||
+-                    statusBarStateController.getState() == StatusBarState.KEYGUARD &&
+-                        !centralSurfaces.isBouncerShowing()) &&
+-                !falsingManager.isFalseDoubleTap
+-        ) {
+-            powerManager.goToSleep(e.getEventTime())
+-            return true
++        doubleTapStartedOnSleepSurface =
++            doubleTapStartedOnSleepSurface && isSleepSurface(e)
++        if (e.actionMasked == MotionEvent.ACTION_CANCEL) {
++            doubleTapStartedOnSleepSurface = false
++            tapStartedOnSleepSurface = false
++            return false
+         }
+-        return false
++        if (e.actionMasked != MotionEvent.ACTION_UP) {
++            return false
++        }
++
++        val shouldSleep = doubleTapStartedOnSleepSurface && tapStartedOnSleepSurface &&
++            !falsingManager.isFalseDoubleTap
++        doubleTapStartedOnSleepSurface = false
++        if (shouldSleep) {
++            powerManager.goToSleep(e.eventTime)
++        }
++        return shouldSleep
++    }
++
++    private fun isSleepSurface(e: MotionEvent): Boolean {
++        val shade = shadeInteractor.get()
++        // The legacy keyguard panel itself is expanded, so use normalized expansion rather
++        // than isAnyExpanded. QS/shade contacts, including header taps, belong to their UI.
++        return !statusBarStateController.isDozing && doubleTapToSleepEnabled &&
++            shade.shadeExpansion.value <= 0f && shade.qsExpansion.value <= 0f &&
++            (e.y < quickQsOffsetHeight ||
++                statusBarStateController.state == StatusBarState.KEYGUARD &&
++                    !centralSurfaces.isBouncerShowing())
+     }
+ 
+ }
+-- 
+2.53.0
+
