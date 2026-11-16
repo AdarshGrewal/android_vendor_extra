@@ -1,0 +1,29 @@
+From 8d8ebf7f43780b2e40df7dedb0880a38c072d0f6 Mon Sep 17 00:00:00 2001
+From: Loukious <24696530+Loukious@users.noreply.github.com>
+Date: Mon, 16 Nov 2026 01:55:11 +0100
+Subject: [PATCH] SystemUI: Clear stale small-clock Smartspace anchor
+
+Applying the inactive large weather face can leave Smartspace attached to its hidden date view. The small-clock path replaces only the top constraint, allowing that stale bottom anchor to pull Smartspace into notifications.
+
+Clear the bottom anchor when the small clock owns the layout. Preserve the existing Smartspace height and notification spacing.
+---
+ .../systemui/keyguard/ui/view/layout/sections/ClockSection.kt  | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt
+index e40bd7a..ab44025 100644
+--- a/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt
++++ b/packages/SystemUI/src/com/android/systemui/keyguard/ui/view/layout/sections/ClockSection.kt
+@@ -120,6 +120,9 @@ constructor(
+             setAlpha(getNonTargetClockFace(clock).views, 0F)
+ 
+             if (!keyguardClockViewModel.isLargeClockVisible.value) {
++                // The inactive large weather face anchors Smartspace above its date view.
++                // The small face owns the top anchor, so discard that stale bottom constraint.
++                clear(sharedR.id.bc_smartspace_view, BOTTOM)
+                 if (keyguardClockViewModel.shouldDateWeatherBeBelowSmallClock.value) {
+                     connect(
+                         sharedR.id.bc_smartspace_view,
+-- 
+2.53.0
+
